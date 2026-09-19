@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Prompt Toolkit</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>AI Prompt Toolkit</h1>
+      <p>Save, organize, search, and reuse your AI prompts.</p>
+    </div>
+    <div class="actions">
+      <button id="exportBtn" class="secondary">Export</button>
+      <label class="button secondary" for="importFile">Import</label>
+      <input id="importFile" type="file" accept=".json" hidden>
+      <button id="newBtn">+ New Prompt</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <input id="searchInput" type="search" placeholder="Search prompts...">
+      <select id="categoryFilter">
+        <option value="all">All categories</option>
+      </select>
+      <div id="promptList" class="prompt-list"></div>
+    </aside>
+
+    <section class="editor">
+      <div id="emptyState" class="empty-state">
+        <h2>Your prompt library</h2>
+        <p>Create your first prompt, or choose one from the left.</p>
+        <button id="emptyNewBtn">Create Prompt</button>
+      </div>
+
+      <form id="promptForm" hidden>
+        <div class="form-head">
+          <div>
+            <h2 id="formTitle">New Prompt</h2>
+            <p class="muted">Everything is saved in your browser.</p>
+          </div>
+          <button type="button" id="deleteBtn" class="danger">Delete</button>
+        </div>
+
+        <label>Title<input id="title" required maxlength="100" placeholder="e.g. YouTube Script Writer"></label>
+        <label>Category<input id="category" maxlength="50" placeholder="e.g. Writing"></label>
+        <label>Tags<input id="tags" maxlength="200" placeholder="youtube, script, content"></label>
+        <label>Prompt<textarea id="content" required placeholder="Write your prompt here..."></textarea></label>
+        <div class="form-actions">
+          <button type="submit">Save Prompt</button>
+          <button type="button" id="copyBtn" class="secondary">Copy Prompt</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer>AI Prompt Toolkit v1.0 • Local-first open-source project</footer>
+  <script src="assets/app.js"></script>
+</body>
+</html>

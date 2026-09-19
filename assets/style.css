@@ -1,0 +1,53 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0; font-family: Inter, Arial, sans-serif; background: #f5f7fb;
+  color: #172033; min-height: 100vh;
+}
+.topbar {
+  display:flex; justify-content:space-between; gap:20px; align-items:center;
+  padding:24px 5%; background:#fff; border-bottom:1px solid #e4e8f0;
+}
+h1,h2,p { margin-top:0; }
+h1 { margin-bottom:6px; }
+.topbar p,.muted { color:#687386; }
+.actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+button,.button {
+  border:0; border-radius:9px; padding:10px 15px; cursor:pointer;
+  background:#315efb; color:#fff; font-weight:600; text-decoration:none;
+}
+button:hover,.button:hover { opacity:.9; }
+.secondary { background:#e9edf5; color:#25324a; }
+.danger { background:#d93025; }
+.layout {
+  width:90%; max-width:1300px; margin:28px auto; display:grid;
+  grid-template-columns:330px 1fr; gap:24px;
+}
+.sidebar,.editor {
+  background:#fff; border:1px solid #e4e8f0; border-radius:14px; padding:18px;
+}
+.sidebar { min-height:600px; }
+input,select,textarea {
+  width:100%; padding:11px 12px; border:1px solid #d7ddea; border-radius:9px;
+  margin-top:7px; font:inherit; background:#fff;
+}
+#searchInput { margin-bottom:10px; }
+.prompt-list { margin-top:15px; display:grid; gap:8px; }
+.prompt-item {
+  padding:12px; border:1px solid #e1e5ed; border-radius:9px; cursor:pointer;
+}
+.prompt-item.active { border-color:#315efb; background:#f0f4ff; }
+.prompt-item strong { display:block; margin-bottom:4px; }
+.prompt-item small { color:#687386; }
+.editor { min-height:600px; }
+form label { display:block; margin:18px 0; font-weight:600; }
+textarea { min-height:300px; resize:vertical; }
+.form-head,.form-actions { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+.form-actions { justify-content:flex-start; }
+.empty-state { text-align:center; padding:150px 20px; color:#687386; }
+.empty-state h2 { color:#172033; }
+footer { text-align:center; padding:20px; color:#7a8495; font-size:13px; }
+@media (max-width:800px) {
+  .topbar { flex-direction:column; align-items:flex-start; }
+  .layout { grid-template-columns:1fr; width:94%; }
+  .sidebar { min-height:auto; }
+}
