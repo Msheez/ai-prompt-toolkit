@@ -1,0 +1,28 @@
+# Dependencies (the project has none, but tooling may create these)
+node_modules/
+package-lock.json
+
+# Build and tool output
+dist/
+coverage/
+.cache/
+*.tsbuildinfo
+
+# Local environment
+.env
+.env.local
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Operating systems
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local prompt exports (never commit your own library)
+ai-prompts-*.json
+ai-prompts-*.md
