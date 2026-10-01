@@ -1,0 +1,54 @@
+name: 💡 Feature request
+description: Suggest an improvement or a new capability
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. It helps to know the problem you are trying to solve,
+        not just the solution you have in mind.
+
+        The [roadmap](https://github.com/Msheez/ai-prompt-toolkit/blob/main/docs/ROADMAP.md)
+        shows what is already planned.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      placeholder: Once I had 40 prompts, tags were not enough to keep them organised…
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: How big do you think this is?
+      options:
+        - Small — a tweak to something that exists
+        - Medium — a new feature in the current architecture
+        - Large — needs a backend, accounts or a build step
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Project constraints
+      description: The toolkit is deliberately local-first, dependency-free and buildless.
+      options:
+        - label: This can work without a server or an account
+        - label: This can work without adding a runtime dependency
+        - label: I would be interested in helping to implement it

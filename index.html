@@ -1,63 +1,339 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Prompt Toolkit</title>
-  <link rel="stylesheet" href="assets/style.css">
+  <title>AI Prompt Toolkit — save, organise and reuse your AI prompts</title>
+
+  <meta name="description" content="A fast, local-first prompt library that runs entirely in your browser. Save, search, template and reuse your AI prompts — no account, no server, no tracking.">
+  <meta name="author" content="Msheez">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0b0f1a">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="AI Prompt Toolkit">
+  <meta property="og:description" content="A fast, local-first prompt library that runs entirely in your browser. Save, search, template and reuse your AI prompts.">
+  <meta property="og:url" content="https://msheez.github.io/ai-prompt-toolkit/">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
 </head>
 <body>
+  <a class="skip-link" href="#workspace">Skip to the prompt editor</a>
+
+  <!-- Icon sprite. Icons are referenced with a use element pointing at these symbol ids. -->
+  <svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15.5A2.5 2.5 0 0 1 4 13.4V6a2 2 0 0 1 2-2h7.4A2.5 2.5 0 0 1 15 5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7h12l-1 12.2a2 2 0 0 1-2 1.8H9a2 2 0 0 1-2-1.8z"/><path d="M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2z"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 2.2a9.8 9.8 0 0 0-3.1 19.1c.5.1.7-.2.7-.5v-1.8c-2.7.6-3.3-1.3-3.3-1.3-.5-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8a2 2 0 0 1 .6-1.3c-2.2-.2-4.5-1.1-4.5-4.9a3.8 3.8 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.6s.8-.3 2.7 1a9.3 9.3 0 0 1 4.9 0c1.9-1.3 2.7-1 2.7-1a3.6 3.6 0 0 1 .1 2.6 3.8 3.8 0 0 1 1 2.7c0 3.8-2.3 4.7-4.5 4.9a2.2 2.2 0 0 1 .6 1.7v2.6c0 .3.2.6.7.5A9.8 9.8 0 0 0 12 2.2z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v10m0 0 4-4m-4 4-4-4M4 18h16"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 20V10m0 0 4 4m-4-4-4 4M4 6h16"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="m12 3 1.9 4.9L19 9.8l-5.1 1.9L12 16.6l-1.9-4.9L5 9.8l5.1-1.9z"/><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5m0 0 6-6m-6 6 6 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M17 10h.01M7 14h10"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  </svg>
+
   <header class="topbar">
-    <div>
-      <h1>AI Prompt Toolkit</h1>
-      <p>Save, organize, search, and reuse your AI prompts.</p>
-    </div>
-    <div class="actions">
-      <button id="exportBtn" class="secondary">Export</button>
-      <label class="button secondary" for="importFile">Import</label>
-      <input id="importFile" type="file" accept=".json" hidden>
-      <button id="newBtn">+ New Prompt</button>
+    <a class="brand" href="./" aria-label="AI Prompt Toolkit home">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><use href="#i-sparkle"></use></svg>
+      </span>
+      <span class="brand__text">
+        <span class="brand__name">AI Prompt Toolkit</span>
+        <span class="brand__sub">Local-first prompt library</span>
+      </span>
+    </a>
+
+    <div class="topbar__actions">
+      <button type="button" id="paletteBtn" class="btn btn--ghost btn--quick">
+        <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
+        <span>Quick open</span>
+        <kbd class="kbd">Ctrl</kbd><kbd class="kbd">K</kbd>
+      </button>
+
+      <div class="menu" id="dataMenu">
+        <button type="button" class="btn btn--ghost" id="dataMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="dataMenuPanel">
+          <svg class="icon" aria-hidden="true"><use href="#i-dots"></use></svg>
+          <span class="only-wide">Library</span>
+        </button>
+        <div class="menu__panel" id="dataMenuPanel" role="menu" hidden>
+          <button type="button" role="menuitem" data-action="export-json">
+            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> Export as JSON
+          </button>
+          <button type="button" role="menuitem" data-action="export-md">
+            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> Export as Markdown
+          </button>
+          <button type="button" role="menuitem" data-action="import">
+            <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg> Import JSON
+          </button>
+          <hr>
+          <button type="button" role="menuitem" data-action="starter">
+            <svg class="icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> Load starter pack
+          </button>
+          <button type="button" role="menuitem" data-action="shortcuts">
+            <svg class="icon" aria-hidden="true"><use href="#i-keyboard"></use></svg> Keyboard shortcuts
+          </button>
+          <hr>
+          <button type="button" role="menuitem" class="is-danger" data-action="clear-all">
+            <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg> Delete everything
+          </button>
+        </div>
+      </div>
+
+      <button type="button" id="themeBtn" class="btn btn--icon" aria-label="Switch colour theme" title="Switch colour theme">
+        <svg class="icon icon--sun" aria-hidden="true"><use href="#i-sun"></use></svg>
+        <svg class="icon icon--moon" aria-hidden="true"><use href="#i-moon"></use></svg>
+      </button>
+
+      <a class="btn btn--icon only-wide" href="https://github.com/Msheez/ai-prompt-toolkit" target="_blank" rel="noopener" aria-label="View the source on GitHub" title="View the source on GitHub">
+        <svg class="icon" aria-hidden="true"><use href="#i-github"></use></svg>
+      </a>
+
+      <button type="button" id="newBtn" class="btn btn--primary">
+        <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+        <span>New prompt</span>
+      </button>
     </div>
   </header>
 
-  <main class="layout">
-    <aside class="sidebar">
-      <input id="searchInput" type="search" placeholder="Search prompts...">
-      <select id="categoryFilter">
-        <option value="all">All categories</option>
-      </select>
-      <div id="promptList" class="prompt-list"></div>
-    </aside>
+  <input id="importFile" type="file" accept="application/json,.json" hidden>
 
-    <section class="editor">
-      <div id="emptyState" class="empty-state">
-        <h2>Your prompt library</h2>
-        <p>Create your first prompt, or choose one from the left.</p>
-        <button id="emptyNewBtn">Create Prompt</button>
+  <main class="layout">
+    <aside class="sidebar" id="sidebar" aria-label="Prompt library">
+      <div class="search">
+        <svg class="icon search__icon" aria-hidden="true"><use href="#i-search"></use></svg>
+        <input id="searchInput" type="search" autocomplete="off" spellcheck="false"
+               placeholder="Search title, text, category, tags" aria-label="Search prompts">
+        <kbd class="kbd search__kbd">/</kbd>
       </div>
 
-      <form id="promptForm" hidden>
-        <div class="form-head">
-          <div>
-            <h2 id="formTitle">New Prompt</h2>
-            <p class="muted">Everything is saved in your browser.</p>
-          </div>
-          <button type="button" id="deleteBtn" class="danger">Delete</button>
+      <div class="filters">
+        <label class="field">
+          <span class="field__label">Category</span>
+          <select id="categoryFilter" aria-label="Filter by category">
+            <option value="all">All categories</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">Sort</span>
+          <select id="sortSelect" aria-label="Sort prompts"></select>
+        </label>
+      </div>
+
+      <div class="filters__row">
+        <button type="button" id="favFilterBtn" class="chip chip--toggle" aria-pressed="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> Favourites
+        </button>
+        <button type="button" id="clearFiltersBtn" class="chip chip--clear" hidden>
+          <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg> Clear filters
+        </button>
+      </div>
+
+      <div id="tagCloud" class="tag-cloud" aria-label="Filter by tag"></div>
+
+      <div class="list-head">
+        <span id="resultCount" class="list-head__count">0 prompts</span>
+        <span id="activeFilterSummary" class="list-head__summary"></span>
+      </div>
+
+      <ul id="promptList" class="prompt-list" aria-label="Prompts"></ul>
+      <div id="listEmpty" class="list-empty" hidden></div>
+
+      <footer class="sidebar__foot">
+        <dl id="stats" class="stats"></dl>
+        <p id="storageNote" class="sidebar__note" hidden></p>
+      </footer>
+    </aside>
+
+    <section class="workspace" id="workspace" tabindex="-1">
+      <div class="welcome" id="welcome">
+        <span class="welcome__badge">Version 2.0</span>
+        <h1 class="welcome__title">Your prompts, finally in one place.</h1>
+        <p class="welcome__lead">
+          Save the prompts that actually work, find them in a keystroke, turn them into reusable
+          templates — all stored privately in this browser. No account, no server, no tracking.
+        </p>
+
+        <div class="welcome__actions">
+          <button type="button" class="btn btn--primary btn--lg" data-action="new">
+            <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg> Create your first prompt
+          </button>
+          <button type="button" class="btn btn--ghost btn--lg" data-action="starter">
+            <svg class="icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> Load 8 starter prompts
+          </button>
         </div>
 
-        <label>Title<input id="title" required maxlength="100" placeholder="e.g. YouTube Script Writer"></label>
-        <label>Category<input id="category" maxlength="50" placeholder="e.g. Writing"></label>
-        <label>Tags<input id="tags" maxlength="200" placeholder="youtube, script, content"></label>
-        <label>Prompt<textarea id="content" required placeholder="Write your prompt here..."></textarea></label>
-        <div class="form-actions">
-          <button type="submit">Save Prompt</button>
-          <button type="button" id="copyBtn" class="secondary">Copy Prompt</button>
+        <ul class="welcome__grid">
+          <li>
+            <h2>Search that finds things</h2>
+            <p>One box searches titles, prompt text, categories and tags, then ranks the best matches first.</p>
+          </li>
+          <li>
+            <h2>Filters that stack</h2>
+            <p>Combine search with a category, several tags and favourites — then reset it all with one click.</p>
+          </li>
+          <li>
+            <h2>Templates with variables</h2>
+            <p>Write <code>{{topic}}</code> once, fill it in before copying, and reuse the same prompt forever.</p>
+          </li>
+          <li>
+            <h2>Your data stays yours</h2>
+            <p>Everything lives in this browser. Export to JSON or Markdown whenever you want a backup.</p>
+          </li>
+        </ul>
+
+        <p class="welcome__hint">
+          Press <kbd class="kbd">Ctrl</kbd><kbd class="kbd">K</kbd> to jump to any prompt,
+          <kbd class="kbd">?</kbd> for all shortcuts.
+        </p>
+      </div>
+
+      <article class="editor" id="editor" hidden>
+        <header class="editor__head">
+          <button type="button" id="backBtn" class="btn btn--icon editor__back" aria-label="Back to library">
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+          </button>
+          <input id="titleInput" class="editor__title" type="text" maxlength="120"
+                 placeholder="Untitled prompt" aria-label="Prompt title" autocomplete="off">
+          <div class="editor__head-actions">
+            <button type="button" id="favoriteBtn" class="btn btn--icon" aria-pressed="false" title="Favourite (Ctrl+D)" aria-label="Favourite this prompt">
+              <svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>
+            </button>
+            <button type="button" id="duplicateBtn" class="btn btn--icon" title="Duplicate prompt" aria-label="Duplicate prompt">
+              <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
+            </button>
+            <button type="button" id="deleteBtn" class="btn btn--icon btn--danger" title="Delete prompt" aria-label="Delete prompt">
+              <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="editor__meta">
+          <label class="field">
+            <span class="field__label">Category</span>
+            <input id="categoryInput" list="categoryOptions" maxlength="50" placeholder="Writing" autocomplete="off">
+          </label>
+          <datalist id="categoryOptions"></datalist>
+          <label class="field">
+            <span class="field__label">Tags <span class="field__hint">comma separated</span></span>
+            <input id="tagsInput" maxlength="200" placeholder="youtube, script, hooks" autocomplete="off">
+          </label>
+          <label class="field field--wide">
+            <span class="field__label">Note <span class="field__hint">optional</span></span>
+            <input id="notesInput" maxlength="500" placeholder="When should you reach for this prompt?" autocomplete="off">
+          </label>
         </div>
-      </form>
+
+        <div class="tabs" role="tablist" aria-label="Editor views">
+          <button type="button" class="tab is-active" role="tab" id="tab-write" data-tab="write" aria-selected="true" aria-controls="panel-write">Write</button>
+          <button type="button" class="tab" role="tab" id="tab-preview" data-tab="preview" aria-selected="false" aria-controls="panel-preview">
+            Preview <span id="variableBadge" class="badge" hidden>0</span>
+          </button>
+          <span class="tabs__spacer"></span>
+          <span id="contentMeta" class="tabs__meta"></span>
+        </div>
+
+        <div class="panel" id="panel-write" role="tabpanel" aria-labelledby="tab-write">
+          <textarea id="contentInput" class="editor__content" spellcheck="true"
+                    placeholder="Write your prompt here…&#10;&#10;Tip: wrap reusable parts in double braces, e.g. Write a post about {{topic}} for {{audience}}."
+                    aria-label="Prompt text"></textarea>
+        </div>
+
+        <div class="panel" id="panel-preview" role="tabpanel" aria-labelledby="tab-preview" hidden>
+          <div id="variableFields" class="variables"></div>
+          <div class="preview">
+            <div class="preview__head">
+              <span>Filled prompt</span>
+              <button type="button" id="previewCopyBtn" class="btn btn--ghost btn--sm">
+                <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg> Copy filled
+              </button>
+            </div>
+            <pre id="previewOutput" class="preview__body"></pre>
+          </div>
+        </div>
+
+        <footer class="editor__foot">
+          <span id="saveState" class="save-state" data-state="saved">All changes saved</span>
+          <div class="editor__foot-actions">
+            <button type="button" id="copyBtn" class="btn btn--ghost">
+              <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg> Copy prompt
+            </button>
+            <button type="button" id="saveBtn" class="btn btn--primary">
+              <svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg> Save
+              <kbd class="kbd only-wide">Ctrl</kbd><kbd class="kbd only-wide">S</kbd>
+            </button>
+          </div>
+        </footer>
+      </article>
     </section>
   </main>
 
-  <footer>AI Prompt Toolkit v1.0 • Local-first open-source project</footer>
-  <script src="assets/app.js"></script>
+  <footer class="sitefoot">
+    <span>AI Prompt Toolkit <strong>v2.0</strong> — local-first, MIT licensed.</span>
+    <span class="sitefoot__links">
+      <a href="https://github.com/Msheez/ai-prompt-toolkit" target="_blank" rel="noopener">Source</a>
+      <a href="https://github.com/Msheez/ai-prompt-toolkit/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
+      <a href="https://github.com/Msheez/ai-prompt-toolkit/issues/new/choose" target="_blank" rel="noopener">Report an issue</a>
+    </span>
+  </footer>
+
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+  <dialog id="paletteDialog" class="dialog dialog--palette" aria-label="Quick open">
+    <div class="palette">
+      <div class="palette__search">
+        <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
+        <input id="paletteInput" type="text" placeholder="Jump to a prompt or run an action…" autocomplete="off" aria-label="Quick open search">
+        <kbd class="kbd">Esc</kbd>
+      </div>
+      <ul id="paletteResults" class="palette__results" role="listbox" aria-label="Quick open results"></ul>
+    </div>
+  </dialog>
+
+  <dialog id="confirmDialog" class="dialog" aria-labelledby="confirmTitle">
+    <h2 id="confirmTitle" class="dialog__title">Are you sure?</h2>
+    <p id="confirmBody" class="dialog__body"></p>
+    <div class="dialog__actions">
+      <button type="button" id="confirmCancel" class="btn btn--ghost">Cancel</button>
+      <button type="button" id="confirmOk" class="btn btn--danger">Delete</button>
+    </div>
+  </dialog>
+
+  <dialog id="shortcutsDialog" class="dialog" aria-labelledby="shortcutsTitle">
+    <h2 id="shortcutsTitle" class="dialog__title">Keyboard shortcuts</h2>
+    <ul class="shortcuts">
+      <li><span>Quick open</span><span><kbd class="kbd">Ctrl</kbd><kbd class="kbd">K</kbd></span></li>
+      <li><span>New prompt</span><span><kbd class="kbd">Ctrl</kbd><kbd class="kbd">Shift</kbd><kbd class="kbd">N</kbd></span></li>
+      <li><span>Focus search</span><span><kbd class="kbd">/</kbd></span></li>
+      <li><span>Save prompt</span><span><kbd class="kbd">Ctrl</kbd><kbd class="kbd">S</kbd></span></li>
+      <li><span>Copy prompt</span><span><kbd class="kbd">Ctrl</kbd><kbd class="kbd">Shift</kbd><kbd class="kbd">C</kbd></span></li>
+      <li><span>Toggle favourite</span><span><kbd class="kbd">Ctrl</kbd><kbd class="kbd">D</kbd></span></li>
+      <li><span>Clear filters</span><span><kbd class="kbd">Esc</kbd></span></li>
+      <li><span>This dialog</span><span><kbd class="kbd">?</kbd></span></li>
+    </ul>
+    <div class="dialog__actions">
+      <button type="button" class="btn btn--primary" data-close-dialog>Got it</button>
+    </div>
+  </dialog>
+
+  <script src="assets/js/core/schema.js"></script>
+  <script src="assets/js/core/search.js"></script>
+  <script src="assets/js/core/variables.js"></script>
+  <script src="assets/js/core/library.js"></script>
+  <script src="assets/js/core/storage.js"></script>
+  <script src="assets/js/core/starter-prompts.js"></script>
+  <script src="assets/js/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,37 @@
+{
+  "name": "ai-prompt-toolkit",
+  "version": "2.0.0",
+  "private": true,
+  "description": "A fast, local-first prompt library that runs entirely in the browser — save, search, template and reuse your AI prompts.",
+  "homepage": "https://msheez.github.io/ai-prompt-toolkit/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Msheez/ai-prompt-toolkit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Msheez/ai-prompt-toolkit/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "ai",
+    "prompts",
+    "prompt-engineering",
+    "prompt-library",
+    "local-first",
+    "vanilla-js",
+    "no-build",
+    "github-pages"
+  ],
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "dev": "node scripts/serve.js",
+    "test": "node --test tests/*.test.js",
+    "test:watch": "node --test --watch tests/*.test.js",
+    "check": "node scripts/check-html.js && npm test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

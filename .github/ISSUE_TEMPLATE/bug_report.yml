@@ -1,0 +1,70 @@
+name: 🐛 Bug report
+description: Something in the toolkit does not work the way it should
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. A few details make it far quicker to fix.
+
+        ⚠️ Found a security issue? Please follow
+        [SECURITY.md](https://github.com/Msheez/ai-prompt-toolkit/blob/main/SECURITY.md)
+        instead of opening a public issue.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+      placeholder: I searched for "youtube" and the prompt I was looking for did not appear…
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1. Open the app
+        2. …
+        3. …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where were you running it?
+      options:
+        - The live site (msheez.github.io/ai-prompt-toolkit)
+        - A local copy (npm start)
+        - A local copy (opened index.html directly)
+        - Somewhere else
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      placeholder: Chrome 131 on Windows 11
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors
+      description: Open developer tools (F12) → Console, and paste anything red. Optional.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues for this problem
+          required: true
+        - label: I removed anything private from the details above
+          required: true

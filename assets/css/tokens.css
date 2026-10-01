@@ -1,0 +1,137 @@
+/* ==========================================================================
+   tokens.css — design tokens
+   One place for colour, type, spacing, radius and shadow decisions.
+   Both themes expose the same variable names, so components never need to
+   know which theme is active.
+   ========================================================================== */
+
+:root {
+  /* Typography ---------------------------------------------------------- */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --text-xs: 0.7rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+  --text-2xl: clamp(1.9rem, 1.2rem + 2.4vw, 2.9rem);
+
+  /* Spacing ------------------------------------------------------------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 56px;
+
+  /* Radius -------------------------------------------------------------- */
+  --r-sm: 8px;
+  --r-md: 11px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-full: 999px;
+
+  /* Motion -------------------------------------------------------------- */
+  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+  --fast: 120ms var(--ease);
+  --base-speed: 200ms var(--ease);
+
+  /* Layout -------------------------------------------------------------- */
+  --topbar-h: 68px;
+  --sidebar-w: 336px;
+  --max-w: 1560px;
+}
+
+/* --------------------------------------------------------------------------
+   Dark theme (default)
+   -------------------------------------------------------------------------- */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #080b14;
+  --bg-glow-1: rgba(109, 139, 255, 0.18);
+  --bg-glow-2: rgba(165, 107, 255, 0.14);
+
+  --surface: #0e1220;
+  --surface-2: #141a2b;
+  --surface-3: #1b2235;
+  --surface-hover: #1a2133;
+
+  --border: #222a40;
+  --border-soft: #1a2133;
+  --border-strong: #35405c;
+
+  --text: #e9edf8;
+  --text-muted: #99a3bd;
+  --text-faint: #6a7490;
+
+  --accent: #7c8dff;
+  --accent-hover: #93a1ff;
+  --accent-ink: #0a0e1a;
+  --accent-soft: rgba(124, 141, 255, 0.14);
+  --accent-ring: rgba(124, 141, 255, 0.45);
+  --accent-grad: linear-gradient(135deg, #7c8dff 0%, #b06bff 100%);
+
+  --success: #3ddc97;
+  --success-soft: rgba(61, 220, 151, 0.14);
+  --warn: #f5b74f;
+  --danger: #ff6b6b;
+  --danger-soft: rgba(255, 107, 107, 0.14);
+  --star: #ffc857;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 10px 30px -12px rgba(0, 0, 0, 0.75);
+  --shadow-lg: 0 28px 70px -24px rgba(0, 0, 0, 0.85);
+  --mark-bg: rgba(124, 141, 255, 0.28);
+}
+
+/* --------------------------------------------------------------------------
+   Light theme
+   -------------------------------------------------------------------------- */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f4f6fc;
+  --bg-glow-1: rgba(99, 102, 241, 0.14);
+  --bg-glow-2: rgba(168, 85, 247, 0.1);
+
+  --surface: #ffffff;
+  --surface-2: #f6f8fd;
+  --surface-3: #eef1f9;
+  --surface-hover: #f0f3fb;
+
+  --border: #e2e7f2;
+  --border-soft: #edf0f7;
+  --border-strong: #cdd5e6;
+
+  --text: #121828;
+  --text-muted: #5c6780;
+  --text-faint: #828da5;
+
+  --accent: #4f5ff0;
+  --accent-hover: #4050e0;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(79, 95, 240, 0.1);
+  --accent-ring: rgba(79, 95, 240, 0.35);
+  --accent-grad: linear-gradient(135deg, #4f5ff0 0%, #8b5cf6 100%);
+
+  --success: #0f9d6b;
+  --success-soft: rgba(15, 157, 107, 0.12);
+  --warn: #b7791f;
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --star: #e0a008;
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 12px 28px -14px rgba(16, 24, 40, 0.24);
+  --shadow-lg: 0 28px 64px -26px rgba(16, 24, 40, 0.32);
+  --mark-bg: rgba(79, 95, 240, 0.18);
+}
