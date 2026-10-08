@@ -39,7 +39,7 @@ jobs:
         run: npm test
 
   verify-static-site:
-    name: Verify the static site
+    name: Build and verify the static site
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repository
@@ -53,20 +53,11 @@ jobs:
       - name: index.html must stay at the repository root
         run: test -f index.html
 
-      - name: The site must serve and expose its assets
-        run: |
-          node scripts/serve.js &
-          SERVER_PID=$!
-          sleep 2
-          set -e
-          for path in / /assets/css/tokens.css /assets/css/base.css \
-                      /assets/css/components.css /assets/css/layout.css \
-                      /assets/js/app.js /assets/js/core/schema.js \
-                      /assets/js/core/search.js /assets/js/core/variables.js \
-                      /assets/js/core/library.js /assets/js/core/storage.js \
-                      /assets/js/core/starter-prompts.js /assets/img/favicon.svg; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000$path")
-            echo "$code  $path"
-            [ "$code" = "200" ] || { kill $SERVER_PID; exit 1; }
-          done
-          kill $SERVER_PID
+      - name: The repository root must serve every file the app needs
+        run: node scripts/verify-site.js
+
+      - name: The production build must succeed
+        run: npm run build
+
+      - name: The built site must serve every file the app needs
+        run: SERVE_DIR=dist node scripts/verify-site.js
