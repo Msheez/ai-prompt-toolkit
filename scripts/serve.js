@@ -12,7 +12,10 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const ROOT = path.resolve(__dirname, "..");
+// SERVE_DIR lets CI serve the built site (dist/) instead of the repository root.
+const ROOT = process.env.SERVE_DIR
+  ? path.resolve(process.env.SERVE_DIR)
+  : path.resolve(__dirname, "..");
 const PORT = Number(process.env.PORT) || 8000;
 const HOST = process.env.HOST || "0.0.0.0";
 
@@ -21,6 +24,7 @@ const TYPES = {
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -36,7 +40,7 @@ const server = http.createServer((request, response) => {
   const filePath = path.join(ROOT, path.normalize(relative));
 
   // Never serve anything outside the project folder.
-  if (!filePath.startsWith(ROOT)) {
+  if (filePath !== ROOT && !filePath.startsWith(ROOT + path.sep)) {
     response.writeHead(403).end("Forbidden");
     return;
   }
@@ -50,6 +54,9 @@ const server = http.createServer((request, response) => {
     response.writeHead(200, {
       "Content-Type": TYPES[path.extname(filePath).toLowerCase()] || "application/octet-stream",
       "Cache-Control": "no-cache",
+      // The same protections the meta tag in index.html asks for, plus ones a meta tag cannot set.
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
     });
     response.end(content);
   });

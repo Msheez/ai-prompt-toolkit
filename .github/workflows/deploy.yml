@@ -1,0 +1,67 @@
+name: Deploy to GitHub Pages
+
+# Runs on every push to main (and by hand from the Actions tab).
+# The pipeline is test -> check -> build -> verify -> deploy. Each stage must
+# pass before the next one starts, so a broken build is never published.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Only one deployment at a time; a newer push replaces one that is still queued
+# but never cancels a deployment that is already running.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Test, check and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Unit tests
+        run: npm test
+
+      - name: No-build sanity checks (asset paths, icon ids, element ids)
+        run: node scripts/check-html.js
+
+      - name: Build the site into dist/
+        run: npm run build
+
+      - name: Serve dist/ and request every file the app needs
+        run: SERVE_DIR=dist node scripts/verify-site.js
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

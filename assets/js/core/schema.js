@@ -9,16 +9,24 @@
  */
 (function (global, factory) {
   if (typeof module === "object" && module.exports) {
-    module.exports = factory();
+    module.exports = factory(require("./security.js"));
   } else {
     global.PromptToolkit = global.PromptToolkit || {};
-    global.PromptToolkit.schema = factory();
+    global.PromptToolkit.schema = factory(global.PromptToolkit.security);
   }
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (security) {
   "use strict";
 
-  /** Bumped whenever the stored shape of a prompt changes. */
-  const SCHEMA_VERSION = 2;
+  /**
+   * Bumped whenever the stored shape of data changes. Every bump needs a
+   * migration step in migrations.js and a test for it.
+   *   1 — original release (bare array, tags as a string)
+   *   2 — envelope, tags array, favourites, usage counts
+   *   3 — prompt `version` number + separate version history
+   */
+  const SCHEMA_VERSION = 3;
+  /** Must match package.json, sw.js and the footer in index.html (tests enforce it). */
+  const APP_VERSION = "3.2.0";
   const APP_NAME = "ai-prompt-toolkit";
 
   const LIMITS = {
@@ -41,13 +49,14 @@
   }
 
   function clean(value, maxLength) {
-    if (value === null || value === undefined) return "";
-    return String(value).replace(/\s+/g, " ").trim().slice(0, maxLength);
+    // Slicing can cut a surrogate pair in half, so repair after truncating.
+    return security.toWellFormed(security.sanitizeString(value).replace(/\s+/g, " ").trim().slice(0, maxLength));
   }
 
   function cleanMultiline(value, maxLength) {
-    if (value === null || value === undefined) return "";
-    return String(value).replace(/\r\n/g, "\n").trim().slice(0, maxLength);
+    return security.toWellFormed(
+      security.sanitizeString(value).replace(/\r\n?/g, "\n").trim().slice(0, maxLength)
+    );
   }
 
   function isIsoDate(value) {
@@ -96,9 +105,12 @@
     const timestamp = now || new Date().toISOString();
     const createdAt = toIsoDate(source.createdAt, toIsoDate(source.updatedAt, timestamp));
     const usage = Number.parseInt(source.usageCount, 10);
+    const revision = Number.parseInt(source.version, 10);
+    const rawId = typeof source.id === "string" ? source.id.trim() : "";
 
     return {
-      id: typeof source.id === "string" && source.id.trim() ? source.id.trim() : createId(),
+      // Ids end up as object keys and in the URL hash, so odd ones are replaced.
+      id: rawId && rawId.length <= 100 && !security.isDangerousKey(rawId) ? rawId : createId(),
       title: clean(source.title, LIMITS.title) || "Untitled prompt",
       category: clean(source.category, LIMITS.category) || DEFAULT_CATEGORY,
       tags: normalizeTags(source.tags),
@@ -106,6 +118,7 @@
       notes: clean(source.notes, LIMITS.notes),
       favorite: Boolean(source.favorite || source.starred),
       usageCount: Number.isFinite(usage) && usage > 0 ? usage : 0,
+      version: Number.isFinite(revision) && revision > 0 ? revision : 1,
       createdAt,
       updatedAt: toIsoDate(source.updatedAt, createdAt),
     };
@@ -140,7 +153,9 @@
   function createExport(prompts) {
     return {
       app: APP_NAME,
+      kind: "export",
       schemaVersion: SCHEMA_VERSION,
+      appVersion: APP_VERSION,
       exportedAt: new Date().toISOString(),
       count: Array.isArray(prompts) ? prompts.length : 0,
       prompts: normalizeAll(prompts),
@@ -153,17 +168,14 @@
    */
   function parseExport(input) {
     let data = input;
-    if (typeof input === "string") {
-      try {
-        data = JSON.parse(input);
-      } catch (error) {
-        throw new Error("That file is not valid JSON.");
-      }
-    }
+    if (typeof input === "string") data = security.safeParseJson(input).data;
 
     let list = null;
     if (Array.isArray(data)) list = data;
     else if (data && typeof data === "object" && Array.isArray(data.prompts)) list = data.prompts;
+    else if (data && typeof data === "object" && data.data && Array.isArray(data.data.prompts)) {
+      list = data.data.prompts; // a full backup file: the prompts live under `data`
+    }
 
     if (!list) throw new Error("No prompts found in that file.");
 
@@ -201,23 +213,36 @@
     return { prompts: Array.from(byId.values()), added, updated, skipped };
   }
 
+  /**
+   * A code fence that is always longer than any run of backticks inside the
+   * text, so a prompt that itself contains ``` cannot close the fence early
+   * and spill into the surrounding Markdown.
+   */
+  function fenceFor(text) {
+    let longest = 0;
+    for (const run of String(text).match(/`+/g) || []) longest = Math.max(longest, run.length);
+    return "`".repeat(Math.max(3, longest + 1));
+  }
+
   /** Renders the library as a readable Markdown document. */
   function toMarkdown(prompts) {
     const list = normalizeAll(prompts);
     const lines = ["# AI Prompt Toolkit export", "", `${list.length} prompt${list.length === 1 ? "" : "s"}`, ""];
     for (const prompt of list) {
+      const fence = fenceFor(prompt.content);
       lines.push(`## ${prompt.title}`, "");
       lines.push(`- Category: ${prompt.category}`);
       if (prompt.tags.length) lines.push(`- Tags: ${prompt.tags.join(", ")}`);
       lines.push(`- Updated: ${prompt.updatedAt.slice(0, 10)}`, "");
       if (prompt.notes) lines.push(`> ${prompt.notes}`, "");
-      lines.push("```text", prompt.content, "```", "");
+      lines.push(`${fence}text`, prompt.content, fence, "");
     }
     return lines.join("\n");
   }
 
   return {
     APP_NAME,
+    APP_VERSION,
     DEFAULT_CATEGORY,
     LIMITS,
     SCHEMA_VERSION,

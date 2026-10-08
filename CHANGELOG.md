@@ -4,6 +4,54 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project uses [Semantic Versioning](https://semver.org/).
 
+## [3.2.0] — 2026-10-08
+
+The release that takes the app from v2.0 to a hardened, offline-capable, deployable v3.2.
+It contains the v3.0, v3.1 and v3.2 milestones. Existing libraries are upgraded
+automatically on first load and the old data is left in place.
+
+### Added
+
+**Version history (v3.0)**
+- Every prompt keeps up to 25 versions; explicit saves always create one, autosave is coalesced
+- History tab: line-by-line diff against the current text, restore, delete old versions
+- Restoring first records the current text, so it can always be undone
+
+**Backup, import and migration (v3.1)**
+- Full backup file with prompts, history, selected settings and a checksum
+- Import preview (counts, warnings, errors) before anything changes
+- Five import modes: merge, add new only, update existing only, import as copies, replace
+- One-slot safety copy before risky imports, with restore
+- Migration ladder v1 → v2 → v3 that never deletes the source; data from a newer version is refused
+- Storage recovery: saving pauses on damaged/newer data, raw download, set-aside copy
+- Read-only health check and a reset that requires typing `DELETE`
+- Settings & data dialog
+
+**Security, privacy and production (v3.2)**
+- `security.js`: one place for size, depth, prototype-key, control-character and Unicode checks
+- Strict Content Security Policy (no inline code, no foreign origins) and `no-referrer`
+- Service worker, web app manifest and icons: installable, works offline, updates only on request
+- `deploy.yml`: test → check → build → verify → deploy to GitHub Pages
+- `npm run build`, `verify:site` and `test:e2e` (13 real-browser checks)
+- `docs/PRIVACY.md`, `SECURITY.md`, `STORAGE.md`, `DEPLOYMENT.md`; roadmap rewritten as a feature matrix
+- Release tests that enforce matching versions, a complete offline file list, no unsafe APIs and no network calls
+
+### Changed
+- Data schema is now version 3 (prompts carry a `version` number); exports and backups record `schemaVersion` and `appVersion`
+- Storage keys moved to `*.v3`; the previous `*.v2` and `*.v1` keys are kept until you remove them
+- Markdown export uses a code fence longer than any backtick run in the prompt
+- Unit tests grew from 58 to 149
+
+### Security
+- Imported keys `__proto__`, `constructor` and `prototype` are removed at any depth
+- Prompt ids that are over-long or dangerous are replaced
+- Control characters and broken UTF-16 are removed or repaired on input
+
+### Known limitations
+- Storage is still `localStorage` (about 5 MB). IndexedDB is planned for v3.4
+- No encryption: prompts and backups are plain text
+- No archive, collections or CSV/TXT import yet (see the roadmap)
+
 ## [2.0.0] — 2026-10-01
 
 A rebuild of the app around a tested core, plus the v2, v3 and v4 roadmap
@@ -82,5 +130,6 @@ Initial release.
 - `localStorage` persistence
 - Published to GitHub Pages
 
+[3.2.0]: https://github.com/Msheez/ai-prompt-toolkit/releases/tag/v3.2.0
 [2.0.0]: https://github.com/Msheez/ai-prompt-toolkit/releases/tag/v2.0.0
 [1.0.0]: https://github.com/Msheez/ai-prompt-toolkit/releases/tag/v1.0.0
