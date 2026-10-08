@@ -57,9 +57,10 @@
   };
 
   const DEFAULT_SETTINGS = {
-    theme: "dark",
+    theme: "system", // "system" | "light" | "dark"
     sort: "updated",
     onboarded: false,
+    trackUsage: true,
     lastBackupAt: "",
   };
 
@@ -399,6 +400,19 @@
      * Housekeeping
      * -------------------------------------------------------------- */
 
+    /**
+     * The stored library exactly as it is on disk (before normalising). Used
+     * only by the health check, which has to see problems that loading hides.
+     */
+    function readStored() {
+      const library = readJson(KEYS.library);
+      const versions = readJson(KEYS.versions);
+      return {
+        rawPrompts: library && Array.isArray(library.prompts) ? library.prompts : [],
+        rawVersions: security.isPlainObject(versions) ? versions : {},
+      };
+    }
+
     /** Characters stored per area (roughly 2 bytes each in most browsers). */
     function usage() {
       const out = {
@@ -443,6 +457,7 @@
       loadSettings,
       readProblemRaw,
       readQuarantine,
+      readStored,
       resolveProblem,
       saveSafety,
       savePrompts,

@@ -84,7 +84,8 @@
   function pickSettings(settings) {
     const source = security.isPlainObject(settings) ? settings : {};
     const picked = {};
-    if (source.theme === "light" || source.theme === "dark") picked.theme = source.theme;
+    if (source.theme === "light" || source.theme === "dark" || source.theme === "system") picked.theme = source.theme;
+    if (typeof source.trackUsage === "boolean") picked.trackUsage = source.trackUsage;
     if (typeof source.sort === "string" && /^[a-z-]{1,20}$/.test(source.sort)) picked.sort = source.sort;
     return picked;
   }
