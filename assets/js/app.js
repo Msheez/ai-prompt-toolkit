@@ -9,12 +9,15 @@
  *   DOM    ->  events    ->  state
  *
  * Nothing here builds HTML from strings, so user content can never be
- * interpreted as markup.
+ * interpreted as markup. (tests/release.test.js fails the build if
+ * innerHTML, eval or document.write ever appear.) This file never touches
+ * localStorage directly either; all persistence goes through storage.js.
  */
 (function () {
   "use strict";
 
-  const { schema, search, variables, library, storage, starterPrompts } = window.PromptToolkit;
+  const { schema, search, variables, library, storage, starterPrompts, history, backup, health, security, pwa } =
+    window.PromptToolkit;
 
   /* ------------------------------------------------------------------ *
    * State
@@ -24,6 +27,10 @@
 
   const state = {
     prompts: [],
+    versions: {},
+    historySel: null,
+    historyCompare: "current",
+    pendingImport: null,
     settings: storage.DEFAULT_SETTINGS,
     filters: Object.assign({}, search.DEFAULT_FILTERS),
     selectedId: null,
@@ -95,6 +102,63 @@
     confirmOk: $("confirmOk"),
     confirmCancel: $("confirmCancel"),
     shortcutsDialog: $("shortcutsDialog"),
+
+    offlineBadge: $("offlineBadge"),
+    recoveryBanner: $("recoveryBanner"),
+    recoveryTitle: $("recoveryTitle"),
+    recoveryBody: $("recoveryBody"),
+    recoveryDownload: $("recoveryDownload"),
+    recoveryReset: $("recoveryReset"),
+
+    historyBadge: $("historyBadge"),
+    historyHelp: $("historyHelp"),
+    historyList: $("historyList"),
+    historyTitle: $("historyTitle"),
+    historyMeta: $("historyMeta"),
+    historyCompare: $("historyCompare"),
+    historyDiff: $("historyDiff"),
+    historyRestoreBtn: $("historyRestoreBtn"),
+    historyDuplicateBtn: $("historyDuplicateBtn"),
+    historyDeleteBtn: $("historyDeleteBtn"),
+
+    importDialog: $("importDialog"),
+    importFileName: $("importFileName"),
+    importErrors: $("importErrors"),
+    importWarnings: $("importWarnings"),
+    importSummary: $("importSummary"),
+    importModes: $("importModes"),
+    importSettingsRow: $("importSettingsRow"),
+    importSettings: $("importSettings"),
+    importOutcome: $("importOutcome"),
+    importCancel: $("importCancel"),
+    importConfirm: $("importConfirm"),
+
+    settingsDialog: $("settingsDialog"),
+    settingTheme: $("settingTheme"),
+    settingSort: $("settingSort"),
+    settingTrackUsage: $("settingTrackUsage"),
+    backupStatus: $("backupStatus"),
+    settingsBackupBtn: $("settingsBackupBtn"),
+    settingsImportBtn: $("settingsImportBtn"),
+    settingsExportJsonBtn: $("settingsExportJsonBtn"),
+    settingsExportMdBtn: $("settingsExportMdBtn"),
+    safetyBox: $("safetyBox"),
+    safetyText: $("safetyText"),
+    safetyRestoreBtn: $("safetyRestoreBtn"),
+    safetyDiscardBtn: $("safetyDiscardBtn"),
+    storageInfo: $("storageInfo"),
+    healthBtn: $("healthBtn"),
+    dropLegacyBtn: $("dropLegacyBtn"),
+    quarantineBtn: $("quarantineBtn"),
+    healthResults: $("healthResults"),
+    settingsResetBtn: $("settingsResetBtn"),
+
+    resetDialog: $("resetDialog"),
+    resetBody: $("resetBody"),
+    resetBackupBtn: $("resetBackupBtn"),
+    resetInput: $("resetInput"),
+    resetCancel: $("resetCancel"),
+    resetConfirm: $("resetConfirm"),
   };
 
   /* ------------------------------------------------------------------ *
@@ -154,10 +218,45 @@
     return library.find(state.prompts, state.selectedId);
   }
 
+  /**
+   * Writes the prompts. When the stored library is damaged or came from a newer
+   * app version, saving is paused (the recovery banner explains why) instead
+   * of overwriting it.
+   */
   function persist() {
+    if (store.isLocked()) return false;
     const ok = store.savePrompts(state.prompts);
     if (!ok) toast("Could not save — browser storage is full or blocked.", { type: "error" });
     return ok;
+  }
+
+  let trimNoticeShown = false;
+
+  /** Writes the version history. The store may trim old entries to fit the quota. */
+  function persistVersions() {
+    if (store.isLocked()) return false;
+    const result = store.saveVersions(state.versions);
+    state.versions = result.versions;
+    if (!result.ok) {
+      toast("Could not save version history — browser storage is full.", { type: "error" });
+    } else if (result.trimmed && !trimNoticeShown) {
+      trimNoticeShown = true;
+      toast("Browser storage is getting full, so the oldest saved versions were removed. Create a backup soon.", {
+        duration: 6000,
+      });
+    }
+    return result.ok;
+  }
+
+  /** Adds a history entry for `current` and keeps the prompt's version number in step. */
+  function recordVersion(previous, current, options) {
+    const result = history.record(state.versions, current, Object.assign({ previous }, options || {}));
+    if (!result.changed) return false;
+    state.versions = result.versions;
+    if (result.entry && current.version !== result.entry.n) {
+      state.prompts = library.patch(state.prompts, current.id, { version: result.entry.n }).prompts;
+    }
+    return true;
   }
 
   /* ------------------------------------------------------------------ *
@@ -422,6 +521,7 @@
     const parts = [plural(words, "word"), `${text.length} chars`];
     if (list.length) parts.push(plural(list.length, "variable"));
     const prompt = selected();
+    if (prompt && prompt.version > 1) parts.push(`version ${prompt.version}`);
     if (prompt && prompt.usageCount) parts.push(`copied ${prompt.usageCount}×`);
     ui.contentMeta.textContent = parts.join(" · ");
 
@@ -491,10 +591,16 @@
       const active = button.dataset.tab === tab;
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-selected", String(active));
+      button.tabIndex = active ? 0 : -1;
     }
     $("panel-write").hidden = tab !== "write";
     $("panel-preview").hidden = tab !== "preview";
+    $("panel-history").hidden = tab !== "history";
     if (tab === "preview") renderVariables();
+    if (tab === "history") {
+      autosave.flush();
+      renderHistory();
+    }
   }
 
   function setSaveState(mode) {
@@ -509,6 +615,8 @@
     renderList();
     renderStats();
     renderEditor();
+    renderHistoryBadge();
+    if (state.tab === "history") renderHistory();
   }
 
   /* ------------------------------------------------------------------ *
@@ -534,15 +642,23 @@
       return;
     }
 
+    const explicit = Boolean(options && options.announce);
     const result = library.upsert(state.prompts, Object.assign({}, prompt, draft));
     state.prompts = result.prompts;
-    persist();
-    setSaveState("saved");
+
+    // Every real change is remembered. Ctrl+S / the Save button always adds its
+    // own entry; autosave folds rapid edits into one so history stays readable.
+    const versionChanged = recordVersion(prompt, result.prompt, explicit ? { force: true, reason: "save" } : {});
+
+    const saved = persist();
+    if (versionChanged) persistVersions();
+    setSaveState(saved ? "saved" : "unsaved");
     renderFilterControls();
     renderList();
     renderStats();
     renderContentMeta();
-    if (options && options.announce) toast("Prompt saved.", { type: "success", duration: 1600 });
+    renderHistoryBadge();
+    if (explicit && saved) toast("Prompt saved.", { type: "success", duration: 1600 });
   }
 
   const autosave = debounce(() => saveDraft(), AUTOSAVE_MS);
@@ -569,9 +685,11 @@
     pruneBlankDrafts(id);
     state.selectedId = id;
     state.variableValues = {};
+    state.historySel = null;
+    state.historyCompare = "current";
     setActiveTab("write");
     render();
-    if (location.hash !== `#p=${id}`) history.replaceState(null, "", `#p=${id}`);
+    if (location.hash !== `#p=${id}`) window.history.replaceState(null, "", `#p=${id}`);
     if (!(options && options.silent)) {
       requestAnimationFrame(() => {
         const prompt = selected();
@@ -599,11 +717,15 @@
 
     const removal = library.remove(state.prompts, id);
     state.prompts = removal.prompts;
+    // Keep the prompt's history for the undo window; it is dropped from storage with the prompt.
+    const removedHistory = history.get(state.versions, id);
+    state.versions = history.pruneOrphans(state.versions, state.prompts).versions;
     if (state.selectedId === id) {
       state.selectedId = null;
-      history.replaceState(null, "", location.pathname + location.search);
+      window.history.replaceState(null, "", location.pathname + location.search);
     }
     persist();
+    persistVersions();
     render();
 
     toast(`Deleted “${target.title}”.`, {
@@ -612,7 +734,9 @@
         label: "Undo",
         onClick: () => {
           state.prompts = library.restore(state.prompts, removal.removed, removal.index);
+          if (removedHistory.length) state.versions = Object.assign({}, state.versions, { [id]: removedHistory });
           persist();
+          persistVersions();
           selectPrompt(removal.removed.id, { force: true, silent: true });
           toast("Restored.", { type: "success", duration: 1600 });
         },
@@ -697,15 +821,228 @@
     );
     if (!copied) return;
 
-    const result = library.markUsed(state.prompts, prompt.id);
-    state.prompts = result.prompts;
-    persist();
-    renderList();
-    renderContentMeta();
+    if (state.settings.trackUsage !== false) {
+      const result = library.markUsed(state.prompts, prompt.id);
+      state.prompts = result.prompts;
+      persist();
+      renderList();
+      renderContentMeta();
+    }
   }
 
   /* ------------------------------------------------------------------ *
-   * Import / export
+   * Version history
+   * ------------------------------------------------------------------ */
+
+  function promptHistory() {
+    const prompt = selected();
+    return prompt ? history.get(state.versions, prompt.id) : [];
+  }
+
+  /** The prompt as it is in the editor right now, including unsaved typing. */
+  function currentFields() {
+    return history.fieldsOf(Object.assign({}, selected(), readDraft()));
+  }
+
+  function renderHistoryBadge() {
+    const count = promptHistory().length;
+    ui.historyBadge.hidden = count === 0;
+    ui.historyBadge.textContent = String(count);
+  }
+
+  function describeEntry(entry) {
+    return `${history.reasonLabel(entry.reason)} · ${relativeTime(entry.savedAt)}`;
+  }
+
+  function renderDiff(diff) {
+    const box = ui.historyDiff;
+    box.textContent = "";
+
+    if (!diff.changed) {
+      box.appendChild(element("div", "diff__none", "These two versions are identical."));
+      return;
+    }
+
+    if (diff.fields.length) {
+      const fields = element("div", "diff__fields");
+      const names = { title: "Title", category: "Category", notes: "Note", tags: "Tags" };
+      for (const change of diff.fields) {
+        fields.appendChild(
+          element("div", null, `${names[change.field]}: “${change.from || "empty"}” → “${change.to || "empty"}”`)
+        );
+      }
+      box.appendChild(fields);
+    }
+
+    if (diff.lines.added + diff.lines.removed === 0) return;
+    const marks = { add: "+", del: "−", same: " " };
+    const spoken = { add: "Added: ", del: "Removed: ", same: "" };
+
+    for (const op of history.collapse(diff.lines.ops, 2)) {
+      if (op.type === "skip") {
+        box.appendChild(element("div", "diff__skip", `${plural(op.count, "unchanged line")} hidden`));
+        continue;
+      }
+      const line = element("div", `diff__line diff__line--${op.type}`);
+      line.appendChild(element("span", "diff__mark", marks[op.type])).setAttribute("aria-hidden", "true");
+      if (spoken[op.type]) line.appendChild(element("span", "visually-hidden", spoken[op.type]));
+      line.appendChild(element("span", null, op.text === "" ? " " : op.text));
+      box.appendChild(line);
+    }
+    if (diff.lines.truncated) {
+      box.appendChild(element("div", "diff__skip", "This prompt is very long, so every line is shown as changed."));
+    }
+  }
+
+  function renderHistory() {
+    renderHistoryBadge();
+    const prompt = selected();
+    const entries = promptHistory();
+
+    ui.historyList.textContent = "";
+    ui.historyCompare.textContent = "";
+    ui.historyDiff.textContent = "";
+
+    if (!prompt || !entries.length) {
+      ui.historyHelp.textContent =
+        "No saved versions yet. A version is added when you edit and save this prompt, so you can always come back to an earlier wording.";
+      ui.historyTitle.textContent = "No versions yet";
+      ui.historyMeta.textContent = "";
+      for (const button of [ui.historyRestoreBtn, ui.historyDuplicateBtn, ui.historyDeleteBtn]) button.disabled = true;
+      ui.historyCompare.disabled = true;
+      return;
+    }
+
+    ui.historyCompare.disabled = false;
+    ui.historyHelp.textContent =
+      `${plural(entries.length, "saved version")}, newest first. Autosave folds quick edits into one entry; ` +
+      "Save (Ctrl+S) always adds a new one. Restoring never discards your current text.";
+
+    if (!entries.some((entry) => entry.n === state.historySel)) {
+      // Open on the version before the newest, which shows "what did my last edit change?".
+      state.historySel = (entries.length > 1 ? entries[entries.length - 2] : entries[entries.length - 1]).n;
+    }
+    const chosen = entries.find((entry) => entry.n === state.historySel);
+    const latest = entries[entries.length - 1];
+
+    for (const entry of entries.slice().reverse()) {
+      const item = document.createElement("li");
+      const button = element("button", "history__item");
+      button.type = "button";
+      button.setAttribute("aria-current", String(entry.n === chosen.n));
+
+      const top = element("span", "history__item-top");
+      top.appendChild(element("span", null, `Version ${entry.n}`));
+      if (entry.n === latest.n) top.appendChild(element("span", "history__tag", "latest"));
+      button.appendChild(top);
+      button.appendChild(element("span", "history__item-sub", describeEntry(entry)));
+      button.addEventListener("click", () => {
+        state.historySel = entry.n;
+        state.historyCompare = "current";
+        renderHistory();
+      });
+      item.appendChild(button);
+      ui.historyList.appendChild(item);
+    }
+
+    ui.historyTitle.textContent = `Version ${chosen.n}`;
+    ui.historyMeta.textContent = `${history.reasonLabel(chosen.reason)} · ${new Date(chosen.savedAt).toLocaleString()}`;
+
+    const current = element("option", null, "Current text in the editor");
+    current.value = "current";
+    ui.historyCompare.appendChild(current);
+    for (const entry of entries.slice().reverse()) {
+      if (entry.n === chosen.n) continue;
+      const option = element("option", null, `Version ${entry.n} · ${relativeTime(entry.savedAt)}`);
+      option.value = String(entry.n);
+      ui.historyCompare.appendChild(option);
+    }
+    if (![...ui.historyCompare.options].some((option) => option.value === state.historyCompare)) {
+      state.historyCompare = "current";
+    }
+    ui.historyCompare.value = state.historyCompare;
+
+    const target =
+      state.historyCompare === "current"
+        ? currentFields()
+        : entries.find((entry) => String(entry.n) === state.historyCompare) || currentFields();
+    renderDiff(history.diffEntries(chosen, target));
+
+    const identical = history.sameFields(chosen, currentFields());
+    ui.historyRestoreBtn.disabled = identical;
+    ui.historyRestoreBtn.title = identical ? "The editor already has this text" : "";
+    ui.historyDuplicateBtn.disabled = false;
+    ui.historyDeleteBtn.disabled = chosen.n === latest.n;
+    ui.historyDeleteBtn.title = chosen.n === latest.n ? "The newest version cannot be deleted" : "";
+  }
+
+  function chosenVersion() {
+    return promptHistory().find((entry) => entry.n === state.historySel) || null;
+  }
+
+  async function restoreVersion() {
+    const entry = chosenVersion();
+    const prompt = selected();
+    if (!entry || !prompt) return;
+
+    const ok = await confirmAction(
+      `Restore version ${entry.n}? Your current text is saved as its own version first, so you can come back to it.`,
+      "Restore"
+    );
+    if (!ok) return;
+
+    autosave.flush();
+    // 1. Snapshot what is there now (a no-op if it already matches the newest entry).
+    recordVersion(null, selected(), { force: true, reason: "before-restore" });
+    // 2. Apply the old text and record that as a new version. Nothing is overwritten.
+    const applied = library.upsert(state.prompts, Object.assign({}, selected(), history.fieldsForRestore(entry)));
+    state.prompts = applied.prompts;
+    recordVersion(null, applied.prompt, { force: true, reason: "restore" });
+
+    persist();
+    persistVersions();
+    setSaveState("saved");
+    state.historySel = null;
+    state.historyCompare = "current";
+    render();
+    renderHistory();
+    toast(`Restored version ${entry.n}. The earlier text is still in History.`, { type: "success" });
+  }
+
+  function duplicateVersion() {
+    const entry = chosenVersion();
+    if (!entry) return;
+    autosave.flush();
+    const fields = history.fieldsForRestore(entry);
+    const copy = schema.createPrompt(Object.assign({}, fields, { title: `${fields.title} (version ${entry.n})` }));
+    state.prompts = [copy].concat(state.prompts);
+    recordVersion(null, copy, { force: true, reason: "save" });
+    persist();
+    persistVersions();
+    selectPrompt(copy.id, { force: true, silent: true });
+    toast(`Created a new prompt from version ${entry.n}.`, { type: "success" });
+  }
+
+  async function deleteVersion() {
+    const entry = chosenVersion();
+    const prompt = selected();
+    if (!entry || !prompt) return;
+    const ok = await confirmAction(`Delete version ${entry.n} from this prompt's history? The prompt itself is not changed.`, "Delete version");
+    if (!ok) return;
+
+    const result = history.remove(state.versions, prompt.id, entry.n);
+    if (!result.removed) {
+      return toast(result.reason === "latest" ? "The newest version cannot be deleted." : "That version no longer exists.", { type: "error" });
+    }
+    state.versions = result.versions;
+    persistVersions();
+    state.historySel = null;
+    renderHistory();
+    toast(`Deleted version ${entry.n}.`, { duration: 2200 });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Downloads, backups and exports
    * ------------------------------------------------------------------ */
 
   function download(filename, text, mime) {
@@ -740,27 +1077,331 @@
     toast("Markdown exported.", { type: "success" });
   }
 
-  function importJson(file) {
+  function createBackupFile() {
+    if (!state.prompts.length) return toast("Nothing to back up yet.", { type: "error" });
+    autosave.flush();
+    const file = backup.createBackup({
+      prompts: state.prompts,
+      versions: state.versions,
+      settings: state.settings,
+    });
+    download(`ai-prompt-toolkit-backup-${stamp()}.json`, JSON.stringify(file, null, 2), "application/json");
+    state.settings.lastBackupAt = new Date().toISOString();
+    store.saveSettings(state.settings);
+    renderBackupStatus();
+    toast(
+      `Backup created — ${plural(file.counts.prompts, "prompt")} and ${plural(file.counts.versions, "saved version")}.`,
+      { type: "success" }
+    );
+  }
+
+  function renderBackupStatus() {
+    const last = state.settings.lastBackupAt;
+    ui.backupStatus.textContent = last
+      ? `Last full backup: ${relativeTime(last)} (${new Date(last).toLocaleDateString()}).`
+      : "You have not created a full backup yet.";
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Import: read -> preview -> choose a mode -> confirm
+   * ------------------------------------------------------------------ */
+
+  const KIND_LABELS = {
+    backup: "Full backup",
+    export: "Prompt export",
+    safety: "Safety copy",
+    "legacy list": "Old prompt list (version 1)",
+  };
+
+  function openImport(file) {
+    if (!file) return;
+    if (file.size > security.LIMITS.maxImportBytes) {
+      const mb = Math.round(security.LIMITS.maxImportBytes / (1024 * 1024));
+      return toast(`That file is too large to import (the limit is ${mb} MB).`, { type: "error", duration: 4200 });
+    }
     const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const incoming = schema.parseExport(String(reader.result));
-        const result = schema.mergePrompts(state.prompts, incoming);
-        state.prompts = result.prompts;
-        persist();
-        render();
-        const details = [
-          result.added ? `${result.added} added` : "",
-          result.updated ? `${result.updated} updated` : "",
-          result.skipped ? `${result.skipped} already up to date` : "",
-        ].filter(Boolean);
-        toast(`Import finished — ${details.join(", ") || "nothing changed"}.`, { type: "success" });
-      } catch (error) {
-        toast(error.message || "That file could not be imported.", { type: "error", duration: 4200 });
-      }
-    };
+    reader.onload = () => showImportPreview(file.name, String(reader.result));
     reader.onerror = () => toast("That file could not be read.", { type: "error" });
     reader.readAsText(file);
+  }
+
+  function fillNotice(node, messages) {
+    node.textContent = "";
+    node.hidden = messages.length === 0;
+    if (messages.length === 1) {
+      node.appendChild(element("p", null, messages[0]));
+    } else if (messages.length > 1) {
+      const list = document.createElement("ul");
+      for (const message of messages) list.appendChild(element("li", null, message));
+      node.appendChild(list);
+    }
+  }
+
+  function addSummaryRow(list, label, value) {
+    list.appendChild(element("dt", null, label));
+    const dd = element("dd", null, value);
+    list.appendChild(dd);
+    return dd;
+  }
+
+  function selectedImportMode() {
+    const checked = ui.importModes.querySelector("input[name='importMode']:checked");
+    return checked ? checked.value : "merge";
+  }
+
+  function showImportPreview(name, text) {
+    const inspection = backup.inspect(text);
+    state.pendingImport = { name, inspection };
+
+    ui.importFileName.textContent = name.slice(0, 120);
+    fillNotice(ui.importErrors, inspection.errors);
+    fillNotice(ui.importWarnings, inspection.warnings);
+
+    ui.importSummary.textContent = "";
+    for (const old of ui.importModes.querySelectorAll(".mode")) old.remove();
+    ui.importSettingsRow.hidden = true;
+    ui.importSettings.checked = false;
+
+    if (inspection.ok) {
+      const info = inspection.summary;
+      addSummaryRow(ui.importSummary, "File type", KIND_LABELS[info.kind] || "Prompt file");
+      addSummaryRow(ui.importSummary, "Prompts", String(info.prompts));
+      if (info.kind === "backup" || info.versions) addSummaryRow(ui.importSummary, "Saved versions", String(info.versions));
+      addSummaryRow(
+        ui.importSummary,
+        "Data format",
+        `version ${info.schemaVersion}${info.migratedFrom ? " — upgraded automatically" : ""}`
+      );
+      if (info.appVersion) addSummaryRow(ui.importSummary, "Made with", `AI Prompt Toolkit ${info.appVersion}`);
+      if (info.createdAt && !Number.isNaN(Date.parse(info.createdAt))) {
+        addSummaryRow(ui.importSummary, "Created", new Date(info.createdAt).toLocaleString());
+      }
+      if (info.integrity !== "none") {
+        addSummaryRow(
+          ui.importSummary,
+          "Integrity",
+          info.integrity === "ok" ? "Checksum matches" : "Checksum does NOT match — the file was changed or damaged"
+        );
+      }
+
+      for (const [id, mode] of Object.entries(backup.MODES)) {
+        const label = element("label", "mode");
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "importMode";
+        radio.value = id;
+        radio.checked = id === "merge";
+        radio.addEventListener("change", updateImportOutcome);
+        const text2 = element("span", "mode__text");
+        text2.appendChild(element("span", "mode__label", mode.label));
+        text2.appendChild(element("span", "mode__help", mode.help));
+        label.appendChild(radio);
+        label.appendChild(text2);
+        ui.importModes.appendChild(label);
+      }
+      ui.importSettingsRow.hidden = !(inspection.settings && Object.keys(inspection.settings).length);
+    }
+
+    ui.importModes.hidden = !inspection.ok;
+    updateImportOutcome();
+    if (!ui.importDialog.open) ui.importDialog.showModal();
+  }
+
+  function planFor(mode) {
+    const pending = state.pendingImport;
+    return backup.plan(
+      { prompts: state.prompts, versions: state.versions },
+      { prompts: pending.inspection.prompts, versions: pending.inspection.versions },
+      mode
+    );
+  }
+
+  function updateImportOutcome() {
+    const pending = state.pendingImport;
+    if (!pending || !pending.inspection.ok) {
+      ui.importOutcome.textContent = "";
+      ui.importOutcome.hidden = true;
+      ui.importConfirm.disabled = true;
+      return;
+    }
+    const plan = planFor(selectedImportMode());
+    const changes = plan.stats.added + plan.stats.updated + plan.stats.removed;
+    ui.importOutcome.hidden = false;
+    ui.importOutcome.textContent = changes
+      ? `Result: ${backup.describeStats(plan.stats)}. Your library will have ${plural(plan.prompts.length, "prompt")}.` +
+        (state.prompts.length ? " A safety copy of your current library is kept so you can undo this." : "")
+      : "Nothing would change with this choice.";
+    ui.importConfirm.disabled = changes === 0;
+  }
+
+  function closeImport() {
+    state.pendingImport = null;
+    if (ui.importDialog.open) ui.importDialog.close();
+  }
+
+  function applyImport() {
+    const pending = state.pendingImport;
+    if (!pending || !pending.inspection.ok) return;
+    if (store.isLocked()) {
+      return toast("Saving is paused until the problem at the top of the page is resolved.", { type: "error" });
+    }
+
+    autosave.flush();
+    const mode = selectedImportMode();
+    const before = { prompts: state.prompts, versions: state.versions };
+    const plan = planFor(mode);
+
+    if (state.prompts.length && !store.saveSafety(before, mode)) {
+      return toast(
+        "There is not enough browser storage to keep a safety copy, so nothing was imported. Create a backup file first, then try again.",
+        { type: "error", duration: 7000 }
+      );
+    }
+
+    state.prompts = plan.prompts;
+    state.versions = plan.versions;
+    if (!persist()) {
+      state.prompts = before.prompts;
+      state.versions = before.versions;
+      render();
+      return;
+    }
+    persistVersions();
+
+    if (ui.importSettings.checked && pending.inspection.settings) {
+      const picked = pending.inspection.settings;
+      if (picked.sort) {
+        state.settings.sort = picked.sort;
+        state.filters.sort = picked.sort;
+      }
+      if (typeof picked.trackUsage === "boolean") state.settings.trackUsage = picked.trackUsage;
+      if (picked.theme) applyTheme(picked.theme);
+      else store.saveSettings(state.settings);
+    }
+
+    if (!library.find(state.prompts, state.selectedId)) state.selectedId = null;
+    const summary = backup.describeStats(plan.stats);
+    closeImport();
+    render();
+    toast(`Import finished — ${summary}.`, {
+      type: "success",
+      duration: 12000,
+      action: { label: "Undo", onClick: () => restoreSafety({ skipConfirm: true }) },
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Safety copy (undo for imports)
+   * ------------------------------------------------------------------ */
+
+  async function restoreSafety(options) {
+    const safety = store.loadSafety();
+    if (!safety) return toast("There is no safety copy to restore.");
+
+    if (!(options && options.skipConfirm)) {
+      const ok = await confirmAction(
+        `This puts your library back to how it was ${relativeTime(safety.savedAt)} (${plural(safety.prompts.length, "prompt")}). ` +
+          "Changes made since then are replaced, but your current library is kept as the new safety copy, so you can switch back.",
+        "Restore"
+      );
+      if (!ok) return;
+    }
+
+    autosave.flush();
+    const current = { prompts: state.prompts, versions: state.versions };
+    state.prompts = safety.prompts;
+    state.versions = safety.versions;
+    if (!persist()) {
+      state.prompts = current.prompts;
+      state.versions = current.versions;
+      return;
+    }
+    persistVersions();
+    store.saveSafety(current, "undo");
+    if (!library.find(state.prompts, state.selectedId)) state.selectedId = null;
+    render();
+    renderSafety();
+    toast("Library restored.", { type: "success" });
+  }
+
+  function renderSafety() {
+    const safety = store.loadSafety();
+    ui.safetyBox.hidden = !safety;
+    if (!safety) return;
+    ui.safetyText.textContent =
+      `A safety copy is available: ${plural(safety.prompts.length, "prompt")} as they were ${relativeTime(safety.savedAt)}, ` +
+      `taken before ${safety.reason === "undo" ? "your last restore" : "an import"}.`;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Recovery (damaged data, or data from a newer version)
+   * ------------------------------------------------------------------ */
+
+  function renderRecovery() {
+    const problem = store.getProblem();
+    ui.recoveryBanner.hidden = !problem;
+    if (!problem) return;
+    ui.recoveryTitle.textContent =
+      problem.code === "newer" ? "This library was saved by a newer version of the app" : "Your saved library could not be read";
+    ui.recoveryBody.textContent = `${problem.message} Saving is paused so the stored data is not overwritten.`;
+  }
+
+  function downloadProblemData() {
+    const raw = store.readProblemRaw();
+    if (!raw) return toast("There is nothing to download.");
+    download(`ai-prompt-toolkit-unreadable-data-${stamp()}.txt`, raw, "text/plain");
+    toast("Downloaded the stored data exactly as it was.", { type: "success" });
+  }
+
+  async function startFresh() {
+    const ok = await confirmAction(
+      "Start with an empty library? The stored data is kept in a hidden copy that you can download later from Settings & data.",
+      "Start fresh"
+    );
+    if (!ok) return;
+    let result = store.resolveProblem();
+    if (!result.ok) {
+      const force = await confirmAction(
+        "There is not enough browser storage to keep a copy of the stored data. Download it first if you want to keep it. Continue and discard it?",
+        "Discard and continue"
+      );
+      if (!force) return;
+      result = store.resolveProblem({ discard: true });
+    }
+    state.prompts = [];
+    state.versions = {};
+    state.selectedId = null;
+    renderRecovery();
+    render();
+    toast("Started with an empty library. You can restore a backup from the Library menu.", { type: "success" });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Reset (requires typing DELETE)
+   * ------------------------------------------------------------------ */
+
+  function openReset() {
+    const counts = history.counts(state.versions);
+    ui.resetBody.textContent =
+      `This permanently erases ${plural(state.prompts.length, "prompt")}, ${plural(counts.entries, "saved version")}, ` +
+      "your settings and any safety copy from this browser. There is no undo. Download a backup first if you might want anything back.";
+    ui.resetInput.value = "";
+    ui.resetConfirm.disabled = true;
+    ui.resetDialog.showModal();
+    ui.resetInput.focus();
+  }
+
+  function performReset() {
+    if (ui.resetInput.value !== "DELETE") return;
+    autosave.cancel();
+    state.dirty = false;
+    store.clear();
+    state.prompts = [];
+    state.versions = {};
+    state.selectedId = null;
+    ui.resetDialog.close();
+    window.history.replaceState(null, "", location.pathname + location.search);
+    location.reload();
   }
 
   function loadStarterPack() {
@@ -773,30 +1414,142 @@
     toast(`Added ${plural(result.added, "starter prompt")}.`, { type: "success" });
   }
 
-  async function clearEverything() {
-    if (!state.prompts.length) return toast("Your library is already empty.");
+  /* ------------------------------------------------------------------ *
+   * Settings & data
+   * ------------------------------------------------------------------ */
+
+  function openSettings() {
+    renderSettings();
+    ui.settingsDialog.showModal();
+  }
+
+  function renderSettings() {
+    const theme = ["system", "light", "dark"].includes(state.settings.theme) ? state.settings.theme : "system";
+    ui.settingTheme.value = theme;
+
+    if (!ui.settingSort.options.length) {
+      for (const sort of search.SORTS) {
+        const option = element("option", null, sort.label);
+        option.value = sort.value;
+        ui.settingSort.appendChild(option);
+      }
+    }
+    ui.settingSort.value = state.settings.sort || "updated";
+    ui.settingTrackUsage.checked = state.settings.trackUsage !== false;
+
+    renderBackupStatus();
+    renderSafety();
+    renderStorageInfo();
+    ui.healthResults.textContent = "";
+  }
+
+  function renderStorageInfo() {
+    const usage = store.usage();
+    const counts = history.counts(state.versions);
+    const percent = Math.round((usage.total / health.ESTIMATED_QUOTA_CHARS) * 100);
+
+    ui.storageInfo.textContent = "";
+    addSummaryRow(ui.storageInfo, "Prompts", String(state.prompts.length));
+    addSummaryRow(ui.storageInfo, "Saved versions", `${counts.entries} across ${plural(counts.prompts, "prompt")}`);
+    addSummaryRow(
+      ui.storageInfo,
+      "Storage in use",
+      `about ${Math.max(1, Math.round(usage.total / 1024))} KB of text (roughly ${percent}% of the usual browser limit)`
+    );
+    addSummaryRow(
+      ui.storageInfo,
+      "Storage mode",
+      store.isPersistent ? "Saved in this browser" : "Temporary — private browsing, nothing is kept"
+    );
+    addSummaryRow(ui.storageInfo, "App version", schema.APP_VERSION);
+    addSummaryRow(ui.storageInfo, "Data format", `version ${schema.SCHEMA_VERSION}`);
+
+    const worker = addSummaryRow(ui.storageInfo, "Offline support", "Checking…");
+    const cache = addSummaryRow(ui.storageInfo, "Offline cache", "Checking…");
+    if (pwa.supported() && navigator.serviceWorker.getRegistration) {
+      navigator.serviceWorker.getRegistration().then(
+        (registration) => {
+          worker.textContent =
+            registration && registration.active ? "Active — the app opens without a connection" : "Not active yet — reload once";
+        },
+        () => {
+          worker.textContent = "Unavailable";
+        }
+      );
+      pwa.cacheNames().then((names) => {
+        cache.textContent = names.length ? names.join(", ") : "Nothing cached yet";
+      });
+    } else {
+      worker.textContent = "Not available here (it needs https:// or localhost)";
+      cache.textContent = "—";
+    }
+
+    ui.dropLegacyBtn.hidden = usage.legacy === 0;
+    ui.quarantineBtn.hidden = !store.readQuarantine();
+  }
+
+  function runHealthCheck() {
+    const stored = store.readStored();
+    const report = health.run({
+      persistent: store.isPersistent,
+      problem: store.getProblem(),
+      rawPrompts: stored.rawPrompts,
+      rawVersions: stored.rawVersions,
+      usage: store.usage(),
+    });
+    const labels = { ok: "OK", info: "Note", warn: "Warning", error: "Problem" };
+
+    ui.healthResults.textContent = "";
+    for (const entry of report.checks) {
+      const item = element("li");
+      item.dataset.level = entry.level;
+      item.appendChild(element("span", "health__level", labels[entry.level]));
+      item.appendChild(element("span", null, entry.message));
+      ui.healthResults.appendChild(item);
+    }
+  }
+
+  async function removeLegacyCopies() {
     const ok = await confirmAction(
-      `This permanently deletes all ${plural(state.prompts.length, "prompt")} from this browser. Export a backup first if you are not sure.`,
-      "Delete everything"
+      "Remove the copies of your library that were kept in older storage formats? Your current library is not affected.",
+      "Remove"
     );
     if (!ok) return;
-    state.prompts = [];
-    state.selectedId = null;
-    persist();
-    render();
-    toast("Library cleared.", { type: "success" });
+    store.dropLegacy();
+    renderStorageInfo();
+    toast("Old-format copies removed.", { type: "success" });
+  }
+
+  function downloadQuarantine() {
+    const kept = store.readQuarantine();
+    if (!kept) return;
+    download(`ai-prompt-toolkit-set-aside-data-${stamp()}.txt`, kept.raw, "text/plain");
   }
 
   /* ------------------------------------------------------------------ *
    * Theme
    * ------------------------------------------------------------------ */
 
-  function applyTheme(theme) {
-    document.documentElement.dataset.theme = theme;
-    const color = theme === "light" ? "#f4f6fc" : "#080b14";
+  const lightQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+
+  function resolveTheme(setting) {
+    if (setting === "light" || setting === "dark") return setting;
+    return lightQuery && lightQuery.matches ? "light" : "dark";
+  }
+
+  /** `setting` is "system", "light" or "dark". */
+  function toggleTheme() {
+    applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+  }
+
+  function applyTheme(setting) {
+    const choice = ["system", "light", "dark"].includes(setting) ? setting : "system";
+    const resolved = resolveTheme(choice);
+    document.documentElement.dataset.theme = resolved;
+    const color = resolved === "light" ? "#f4f6fc" : "#080b14";
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", color);
-    state.settings.theme = theme;
+    state.settings.theme = choice;
     store.saveSettings(state.settings);
   }
 
@@ -807,10 +1560,12 @@
   const PALETTE_ACTIONS = [
     { id: "new", title: "New prompt", sub: "Create an empty prompt", icon: "i-plus", run: newPrompt },
     { id: "starter", title: "Load starter pack", sub: "Add 8 ready-made prompts", icon: "i-sparkle", run: loadStarterPack },
-    { id: "export", title: "Export as JSON", sub: "Download a backup", icon: "i-download", run: exportJson },
+    { id: "backup", title: "Create full backup", sub: "Prompts, history and settings in one file", icon: "i-shield", run: createBackupFile },
+    { id: "settings", title: "Settings & data", sub: "Theme, backups, storage, health check", icon: "i-settings", run: openSettings },
+    { id: "export", title: "Export prompts as JSON", sub: "Prompts only, without history", icon: "i-download", run: exportJson },
     { id: "export-md", title: "Export as Markdown", sub: "Readable copy of every prompt", icon: "i-download", run: exportMarkdown },
-    { id: "import", title: "Import JSON", sub: "Merge a backup into this library", icon: "i-upload", run: () => ui.importFile.click() },
-    { id: "theme", title: "Switch theme", sub: "Dark and light", icon: "i-moon", run: () => applyTheme(state.settings.theme === "light" ? "dark" : "light") },
+    { id: "import", title: "Restore or import a file", sub: "Preview first, then choose how to import", icon: "i-upload", run: () => ui.importFile.click() },
+    { id: "theme", title: "Switch theme", sub: "Dark and light", icon: "i-moon", run: toggleTheme },
     { id: "shortcuts", title: "Keyboard shortcuts", sub: "See every shortcut", icon: "i-keyboard", run: () => ui.shortcutsDialog.showModal() },
   ];
 
@@ -969,20 +1724,99 @@
       autosave.flush();
       pruneBlankDrafts(null);
       state.selectedId = null;
-      history.replaceState(null, "", location.pathname + location.search);
+      window.history.replaceState(null, "", location.pathname + location.search);
       render();
     });
 
     for (const tab of document.querySelectorAll(".tab")) {
       tab.addEventListener("click", () => setActiveTab(tab.dataset.tab));
     }
+    // Arrow keys move between tabs, as in the WAI-ARIA tabs pattern.
+    document.querySelector(".tabs").addEventListener("keydown", (event) => {
+      const tabs = Array.from(document.querySelectorAll(".tab"));
+      const index = tabs.indexOf(document.activeElement);
+      if (index < 0) return;
+      const moves = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: tabs.length - 1 };
+      if (!(event.key in moves)) return;
+      event.preventDefault();
+      const next = tabs[(moves[event.key] + tabs.length) % tabs.length];
+      next.focus();
+      setActiveTab(next.dataset.tab);
+    });
+
+    // History
+    ui.historyCompare.addEventListener("change", () => {
+      state.historyCompare = ui.historyCompare.value;
+      renderHistory();
+    });
+    ui.historyRestoreBtn.addEventListener("click", restoreVersion);
+    ui.historyDuplicateBtn.addEventListener("click", duplicateVersion);
+    ui.historyDeleteBtn.addEventListener("click", deleteVersion);
+
+    // Import dialog
+    ui.importCancel.addEventListener("click", closeImport);
+    ui.importConfirm.addEventListener("click", applyImport);
+    ui.importDialog.addEventListener("close", () => {
+      state.pendingImport = null;
+    });
+
+    // Settings
+    ui.settingTheme.addEventListener("change", () => applyTheme(ui.settingTheme.value));
+    ui.settingSort.addEventListener("change", () => {
+      state.settings.sort = ui.settingSort.value;
+      state.filters.sort = ui.settingSort.value;
+      store.saveSettings(state.settings);
+      renderFilterControls();
+      renderList();
+    });
+    ui.settingTrackUsage.addEventListener("change", () => {
+      state.settings.trackUsage = ui.settingTrackUsage.checked;
+      store.saveSettings(state.settings);
+    });
+    ui.settingsBackupBtn.addEventListener("click", createBackupFile);
+    ui.settingsImportBtn.addEventListener("click", () => ui.importFile.click());
+    ui.settingsExportJsonBtn.addEventListener("click", exportJson);
+    ui.settingsExportMdBtn.addEventListener("click", exportMarkdown);
+    ui.safetyRestoreBtn.addEventListener("click", () => restoreSafety());
+    ui.safetyDiscardBtn.addEventListener("click", () => {
+      store.clearSafety();
+      renderSafety();
+      renderStorageInfo();
+      toast("Safety copy discarded.");
+    });
+    ui.healthBtn.addEventListener("click", runHealthCheck);
+    ui.dropLegacyBtn.addEventListener("click", removeLegacyCopies);
+    ui.quarantineBtn.addEventListener("click", downloadQuarantine);
+    ui.settingsResetBtn.addEventListener("click", () => {
+      ui.settingsDialog.close();
+      openReset();
+    });
+
+    // Reset
+    ui.resetInput.addEventListener("input", () => {
+      ui.resetConfirm.disabled = ui.resetInput.value !== "DELETE";
+    });
+    ui.resetCancel.addEventListener("click", () => ui.resetDialog.close());
+    ui.resetBackupBtn.addEventListener("click", createBackupFile);
+    ui.resetConfirm.addEventListener("click", performReset);
+
+    // Recovery banner
+    ui.recoveryDownload.addEventListener("click", downloadProblemData);
+    ui.recoveryReset.addEventListener("click", startFresh);
+
+    // Offline indicator
+    window.addEventListener("online", updateOnlineStatus);
+    window.addEventListener("offline", updateOnlineStatus);
 
     // Top bar
     ui.newBtn.addEventListener("click", newPrompt);
     ui.paletteBtn.addEventListener("click", openPalette);
-    ui.themeBtn.addEventListener("click", () =>
-      applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light")
-    );
+    ui.themeBtn.addEventListener("click", toggleTheme);
+    if (lightQuery && lightQuery.addEventListener) {
+      lightQuery.addEventListener("change", () => {
+        if (state.settings.theme === "system") applyTheme("system");
+      });
+    }
 
     ui.dataMenuBtn.addEventListener("click", () => {
       const open = ui.dataMenuPanel.hidden;
@@ -1002,10 +1836,12 @@
       const actions = {
         "export-json": exportJson,
         "export-md": exportMarkdown,
+        backup: createBackupFile,
         import: () => ui.importFile.click(),
+        settings: openSettings,
         starter: loadStarterPack,
         shortcuts: () => ui.shortcutsDialog.showModal(),
-        "clear-all": clearEverything,
+        reset: openReset,
         new: newPrompt,
       };
       const run = actions[trigger.dataset.action];
@@ -1017,7 +1853,7 @@
 
     ui.importFile.addEventListener("change", (event) => {
       const file = event.target.files && event.target.files[0];
-      if (file) importJson(file);
+      if (file) openImport(file);
       event.target.value = "";
     });
 
@@ -1047,7 +1883,7 @@
       if (!file) return;
       event.preventDefault();
       if (!/\.json$/i.test(file.name)) return toast("Only .json backups can be imported.", { type: "error" });
-      importJson(file);
+      openImport(file);
     });
 
     window.addEventListener("beforeunload", (event) => {
@@ -1060,6 +1896,10 @@
     });
 
     document.addEventListener("keydown", onShortcut);
+  }
+
+  function updateOnlineStatus() {
+    ui.offlineBadge.hidden = navigator.onLine !== false;
   }
 
   function onShortcut(event) {
@@ -1113,14 +1953,11 @@
 
   function init() {
     state.settings = store.loadSettings();
-    if (!store.hasSettings() && window.matchMedia) {
-      // First visit: follow the operating system preference.
-      state.settings.theme = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-    }
-    applyTheme(state.settings.theme === "light" ? "light" : "dark");
+    applyTheme(state.settings.theme);
 
-    const loaded = store.loadPrompts();
+    const loaded = store.loadLibrary();
     state.prompts = loaded.prompts;
+    state.versions = loaded.versions;
     state.filters.sort = state.settings.sort || "updated";
 
     if (!store.isPersistent) {
@@ -1130,17 +1967,39 @@
     }
 
     bindEvents();
+    setActiveTab("write");
+    renderRecovery();
+    updateOnlineStatus();
     render();
 
     if (loaded.migrated) {
-      toast(`Upgraded ${plural(state.prompts.length, "prompt")} from version 1.`, { type: "success", duration: 4000 });
+      toast(`Upgraded ${plural(loaded.migrated.count, "prompt")} to the new storage format. Nothing was deleted.`, {
+        type: "success",
+        duration: 4500,
+      });
     }
+    for (const warning of loaded.warnings.slice(0, 2)) toast(warning, { duration: 7000 });
 
     const match = /#p=([\w-]+)/.exec(location.hash);
     if (match) {
       const prompt = library.find(state.prompts, match[1]);
       if (prompt) selectPrompt(prompt.id, { force: true, silent: true });
     }
+
+    pwa.register({
+      onUpdate: (apply) =>
+        toast("A new version of AI Prompt Toolkit is ready.", {
+          duration: 600000,
+          action: {
+            label: "Reload to update",
+            onClick: () => {
+              autosave.flush();
+              apply();
+            },
+          },
+        }),
+      onOfflineReady: () => toast("Ready to work offline.", { type: "success", duration: 3500 }),
+    });
   }
 
   init();

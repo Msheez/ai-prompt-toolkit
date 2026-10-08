@@ -3,6 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--
+    Content Security Policy. The app loads nothing from other sites and makes no
+    network requests of its own, so everything is locked to this origin.
+    (frame-ancestors cannot be set from a meta tag; see docs/SECURITY.md.)
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'; object-src 'none'">
+  <meta name="referrer" content="no-referrer">
   <title>AI Prompt Toolkit — save, organise and reuse your AI prompts</title>
 
   <meta name="description" content="A fast, local-first prompt library that runs entirely in your browser. Save, search, template and reuse your AI prompts — no account, no server, no tracking.">
@@ -17,12 +24,15 @@
   <meta name="twitter:card" content="summary_large_image">
 
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="assets/css/tokens.css">
   <link rel="stylesheet" href="assets/css/base.css">
   <link rel="stylesheet" href="assets/css/components.css">
   <link rel="stylesheet" href="assets/css/layout.css">
 </head>
 <body>
+  <noscript><p class="noscript">AI Prompt Toolkit needs JavaScript to run. It still never sends your prompts anywhere.</p></noscript>
   <a class="skip-link" href="#workspace">Skip to the prompt editor</a>
 
   <!-- Icon sprite. Icons are referenced with a use element pointing at these symbol ids. -->
@@ -43,6 +53,12 @@
     <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M17 10h.01M7 14h10"/></symbol>
     <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.7-6.2"/><path d="M3.5 4.5v4h4M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5.5c0 4.3 2.9 8 7 9.5 4.1-1.5 7-5.2 7-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.2M12 17h.01"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11.5A8 8 0 0 0 5.6 7M4 12.5A8 8 0 0 0 18.4 17"/><path d="M20 4v4.5h-4.5M4 20v-4.5h4.5"/></symbol>
+    <symbol id="i-offline" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M8.5 8.8A9 9 0 0 0 3 11.5M5.8 14.4a6 6 0 0 1 3.4-2M12 18h.01M15 11.6a9 9 0 0 1 6 2"/></symbol>
   </svg>
 
   <header class="topbar">
@@ -57,6 +73,11 @@
     </a>
 
     <div class="topbar__actions">
+      <span id="offlineBadge" class="status-pill" role="status" aria-label="Offline — everything still works" hidden>
+        <svg class="icon" aria-hidden="true"><use href="#i-offline"></use></svg>
+        <span>Offline — everything still works</span>
+      </span>
+
       <button type="button" id="paletteBtn" class="btn btn--ghost btn--quick">
         <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
         <span>Quick open</span>
@@ -69,16 +90,22 @@
           <span class="only-wide">Library</span>
         </button>
         <div class="menu__panel" id="dataMenuPanel" role="menu" hidden>
+          <button type="button" role="menuitem" data-action="backup">
+            <svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg> Create full backup
+          </button>
+          <button type="button" role="menuitem" data-action="import">
+            <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg> Restore or import a file…
+          </button>
           <button type="button" role="menuitem" data-action="export-json">
-            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> Export as JSON
+            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> Export prompts as JSON
           </button>
           <button type="button" role="menuitem" data-action="export-md">
             <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> Export as Markdown
           </button>
-          <button type="button" role="menuitem" data-action="import">
-            <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg> Import JSON
-          </button>
           <hr>
+          <button type="button" role="menuitem" data-action="settings">
+            <svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg> Settings &amp; data…
+          </button>
           <button type="button" role="menuitem" data-action="starter">
             <svg class="icon" aria-hidden="true"><use href="#i-sparkle"></use></svg> Load starter pack
           </button>
@@ -86,8 +113,8 @@
             <svg class="icon" aria-hidden="true"><use href="#i-keyboard"></use></svg> Keyboard shortcuts
           </button>
           <hr>
-          <button type="button" role="menuitem" class="is-danger" data-action="clear-all">
-            <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg> Delete everything
+          <button type="button" role="menuitem" class="is-danger" data-action="reset">
+            <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg> Reset application…
           </button>
         </div>
       </div>
@@ -97,7 +124,7 @@
         <svg class="icon icon--moon" aria-hidden="true"><use href="#i-moon"></use></svg>
       </button>
 
-      <a class="btn btn--icon only-wide" href="https://github.com/Msheez/ai-prompt-toolkit" target="_blank" rel="noopener" aria-label="View the source on GitHub" title="View the source on GitHub">
+      <a class="btn btn--icon only-wide" href="https://github.com/Msheez/ai-prompt-toolkit" target="_blank" rel="noopener noreferrer" aria-label="View the source on GitHub" title="View the source on GitHub">
         <svg class="icon" aria-hidden="true"><use href="#i-github"></use></svg>
       </a>
 
@@ -109,6 +136,18 @@
   </header>
 
   <input id="importFile" type="file" accept="application/json,.json" hidden>
+
+  <section id="recoveryBanner" class="banner banner--danger" role="alert" hidden>
+    <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
+    <div class="banner__text">
+      <strong id="recoveryTitle">Saving is paused</strong>
+      <span id="recoveryBody"></span>
+    </div>
+    <div class="banner__actions">
+      <button type="button" id="recoveryDownload" class="btn btn--ghost btn--sm">Download the saved data</button>
+      <button type="button" id="recoveryReset" class="btn btn--danger btn--sm">Start with an empty library</button>
+    </div>
+  </section>
 
   <main class="layout">
     <aside class="sidebar" id="sidebar" aria-label="Prompt library">
@@ -159,7 +198,7 @@
 
     <section class="workspace" id="workspace" tabindex="-1">
       <div class="welcome" id="welcome">
-        <span class="welcome__badge">Version 2.0</span>
+        <span class="welcome__badge">Version 3.2</span>
         <h1 class="welcome__title">Your prompts, finally in one place.</h1>
         <p class="welcome__lead">
           Save the prompts that actually work, find them in a keystroke, turn them into reusable
@@ -190,7 +229,19 @@
           </li>
           <li>
             <h2>Your data stays yours</h2>
-            <p>Everything lives in this browser. Export to JSON or Markdown whenever you want a backup.</p>
+            <p>Everything lives in this browser — no account, no server, no tracking. Nothing is sent anywhere.</p>
+          </li>
+          <li>
+            <h2>Every edit is remembered</h2>
+            <p>Open the History tab to compare versions and bring an old one back without losing the current text.</p>
+          </li>
+          <li>
+            <h2>Backups you can trust</h2>
+            <p>Full checksummed backups, a preview before any import, and a safety copy so an import can be undone.</p>
+          </li>
+          <li>
+            <h2>Works offline</h2>
+            <p>Install it as an app, or just keep the tab: after the first visit it opens with no connection.</p>
           </li>
         </ul>
 
@@ -241,6 +292,9 @@
           <button type="button" class="tab" role="tab" id="tab-preview" data-tab="preview" aria-selected="false" aria-controls="panel-preview">
             Preview <span id="variableBadge" class="badge" hidden>0</span>
           </button>
+          <button type="button" class="tab" role="tab" id="tab-history" data-tab="history" aria-selected="false" aria-controls="panel-history">
+            History <span id="historyBadge" class="badge" hidden>0</span>
+          </button>
           <span class="tabs__spacer"></span>
           <span id="contentMeta" class="tabs__meta"></span>
         </div>
@@ -264,6 +318,33 @@
           </div>
         </div>
 
+        <div class="panel" id="panel-history" role="tabpanel" aria-labelledby="tab-history" hidden>
+          <div class="history">
+            <div class="history__side">
+              <p id="historyHelp" class="history__help"></p>
+              <ol id="historyList" class="history__list" aria-label="Saved versions, newest first"></ol>
+            </div>
+            <div class="history__detail">
+              <header class="history__detail-head">
+                <div>
+                  <h3 id="historyTitle" class="history__title"></h3>
+                  <p id="historyMeta" class="history__meta"></p>
+                </div>
+                <label class="field history__compare">
+                  <span class="field__label">Compare with</span>
+                  <select id="historyCompare" aria-label="Compare this version with"></select>
+                </label>
+              </header>
+              <div id="historyDiff" class="diff" tabindex="0" aria-label="Changes between the two versions"></div>
+              <div class="history__actions">
+                <button type="button" id="historyRestoreBtn" class="btn btn--primary btn--sm">Restore this version</button>
+                <button type="button" id="historyDuplicateBtn" class="btn btn--ghost btn--sm">Duplicate as new prompt</button>
+                <button type="button" id="historyDeleteBtn" class="btn btn--ghost btn--sm btn--danger-ghost">Delete this version</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <footer class="editor__foot">
           <span id="saveState" class="save-state" data-state="saved">All changes saved</span>
           <div class="editor__foot-actions">
@@ -281,11 +362,12 @@
   </main>
 
   <footer class="sitefoot">
-    <span>AI Prompt Toolkit <strong>v2.0</strong> — local-first, MIT licensed.</span>
+    <span>AI Prompt Toolkit <strong>v3.2</strong> — local-first, MIT licensed.</span>
     <span class="sitefoot__links">
-      <a href="https://github.com/Msheez/ai-prompt-toolkit" target="_blank" rel="noopener">Source</a>
-      <a href="https://github.com/Msheez/ai-prompt-toolkit/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
-      <a href="https://github.com/Msheez/ai-prompt-toolkit/issues/new/choose" target="_blank" rel="noopener">Report an issue</a>
+      <a href="https://github.com/Msheez/ai-prompt-toolkit" target="_blank" rel="noopener noreferrer">Source</a>
+      <a href="https://github.com/Msheez/ai-prompt-toolkit/blob/main/docs/PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a>
+      <a href="https://github.com/Msheez/ai-prompt-toolkit/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener noreferrer">Roadmap</a>
+      <a href="https://github.com/Msheez/ai-prompt-toolkit/issues/new/choose" target="_blank" rel="noopener noreferrer">Report an issue</a>
     </span>
   </footer>
 
@@ -311,6 +393,124 @@
     </div>
   </dialog>
 
+  <dialog id="importDialog" class="dialog dialog--wide" aria-labelledby="importTitle">
+    <h2 id="importTitle" class="dialog__title">Import preview</h2>
+    <p id="importFileName" class="dialog__body"></p>
+    <div id="importErrors" class="notice notice--error" role="alert" hidden></div>
+    <div id="importWarnings" class="notice notice--warn" hidden></div>
+    <dl id="importSummary" class="summary"></dl>
+    <fieldset id="importModes" class="modes">
+      <legend class="field__label">How should it be imported?</legend>
+    </fieldset>
+    <label id="importSettingsRow" class="check" hidden>
+      <input type="checkbox" id="importSettings">
+      <span>Also use the theme and sorting saved in this file</span>
+    </label>
+    <p id="importOutcome" class="import-outcome" aria-live="polite"></p>
+    <div class="dialog__actions">
+      <button type="button" id="importCancel" class="btn btn--ghost">Cancel</button>
+      <button type="button" id="importConfirm" class="btn btn--primary">Import</button>
+    </div>
+  </dialog>
+
+  <dialog id="settingsDialog" class="dialog dialog--wide dialog--scroll" aria-labelledby="settingsTitle">
+    <div class="dialog__head">
+      <h2 id="settingsTitle" class="dialog__title">Settings &amp; data</h2>
+      <button type="button" class="btn btn--icon" data-close-dialog aria-label="Close settings">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg>
+      </button>
+    </div>
+
+    <section class="settings-section" aria-labelledby="set-general">
+      <h3 id="set-general">General</h3>
+      <div class="settings-grid">
+        <label class="field">
+          <span class="field__label">Theme</span>
+          <select id="settingTheme">
+            <option value="system">Match my device</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">Default sorting</span>
+          <select id="settingSort"></select>
+        </label>
+      </div>
+      <label class="check">
+        <input type="checkbox" id="settingTrackUsage">
+        <span>Count how often I copy each prompt
+          <span class="field__hint">stays on this device; it powers “Most used” sorting</span></span>
+      </label>
+    </section>
+
+    <section class="settings-section" aria-labelledby="set-backup">
+      <h3 id="set-backup">Backup &amp; restore</h3>
+      <p id="backupStatus" class="settings-note"></p>
+      <div class="settings-actions">
+        <button type="button" id="settingsBackupBtn" class="btn btn--primary btn--sm">Create full backup</button>
+        <button type="button" id="settingsImportBtn" class="btn btn--ghost btn--sm">Restore or import a file…</button>
+        <button type="button" id="settingsExportJsonBtn" class="btn btn--ghost btn--sm">Export prompts (JSON)</button>
+        <button type="button" id="settingsExportMdBtn" class="btn btn--ghost btn--sm">Export (Markdown)</button>
+      </div>
+      <p class="settings-note">
+        A full backup contains your prompts, their version history and your theme and sorting choices. Keep it somewhere safe:
+        <strong>backups are plain text files and are not encrypted.</strong>
+      </p>
+      <div id="safetyBox" class="notice" hidden>
+        <p id="safetyText"></p>
+        <div class="settings-actions">
+          <button type="button" id="safetyRestoreBtn" class="btn btn--ghost btn--sm">Restore the safety copy</button>
+          <button type="button" id="safetyDiscardBtn" class="btn btn--ghost btn--sm">Discard it</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-section" aria-labelledby="set-privacy">
+      <h3 id="set-privacy">Privacy</h3>
+      <ul class="plain-list">
+        <li>Your prompts and their history are stored <strong>only in this browser</strong>. They are never uploaded.</li>
+        <li>There is no account, no analytics and no tracking. The app makes no network requests of its own.</li>
+        <li>Stored data is <strong>not encrypted</strong>: anyone who can use this browser profile can read it. Encryption is on the roadmap but is not built yet.</li>
+        <li>Clearing site data in your browser deletes your library. Create a backup first.</li>
+      </ul>
+      <a class="settings-link" href="https://github.com/Msheez/ai-prompt-toolkit/blob/main/docs/PRIVACY.md" target="_blank" rel="noopener noreferrer">Read the full privacy notes</a>
+    </section>
+
+    <section class="settings-section" aria-labelledby="set-storage">
+      <h3 id="set-storage">Storage &amp; health</h3>
+      <dl id="storageInfo" class="summary"></dl>
+      <div class="settings-actions">
+        <button type="button" id="healthBtn" class="btn btn--ghost btn--sm">Run health check</button>
+        <button type="button" id="dropLegacyBtn" class="btn btn--ghost btn--sm" hidden>Remove old-format copies</button>
+        <button type="button" id="quarantineBtn" class="btn btn--ghost btn--sm" hidden>Download set-aside data</button>
+      </div>
+      <ul id="healthResults" class="health" aria-live="polite"></ul>
+    </section>
+
+    <section class="settings-section settings-section--danger" aria-labelledby="set-danger">
+      <h3 id="set-danger">Danger zone</h3>
+      <p class="settings-note">Erases every prompt, every saved version, your settings and the safety copy from this browser. This cannot be undone.</p>
+      <button type="button" id="settingsResetBtn" class="btn btn--danger btn--sm">Reset application…</button>
+    </section>
+  </dialog>
+
+  <dialog id="resetDialog" class="dialog" aria-labelledby="resetTitle">
+    <h2 id="resetTitle" class="dialog__title">Reset the application?</h2>
+    <p id="resetBody" class="dialog__body"></p>
+    <div class="settings-actions">
+      <button type="button" id="resetBackupBtn" class="btn btn--ghost btn--sm">Download a backup first</button>
+    </div>
+    <label class="field reset__field">
+      <span class="field__label">Type <strong>DELETE</strong> to confirm</span>
+      <input id="resetInput" type="text" autocomplete="off" spellcheck="false" aria-describedby="resetBody">
+    </label>
+    <div class="dialog__actions">
+      <button type="button" id="resetCancel" class="btn btn--ghost">Cancel</button>
+      <button type="button" id="resetConfirm" class="btn btn--danger" disabled>Erase everything</button>
+    </div>
+  </dialog>
+
   <dialog id="shortcutsDialog" class="dialog" aria-labelledby="shortcutsTitle">
     <h2 id="shortcutsTitle" class="dialog__title">Keyboard shortcuts</h2>
     <ul class="shortcuts">
@@ -328,12 +528,18 @@
     </div>
   </dialog>
 
+  <script src="assets/js/core/security.js"></script>
   <script src="assets/js/core/schema.js"></script>
   <script src="assets/js/core/search.js"></script>
   <script src="assets/js/core/variables.js"></script>
+  <script src="assets/js/core/history.js"></script>
   <script src="assets/js/core/library.js"></script>
+  <script src="assets/js/core/migrations.js"></script>
+  <script src="assets/js/core/backup.js"></script>
+  <script src="assets/js/core/health.js"></script>
   <script src="assets/js/core/storage.js"></script>
   <script src="assets/js/core/starter-prompts.js"></script>
+  <script src="assets/js/pwa.js"></script>
   <script src="assets/js/app.js"></script>
 </body>
 </html>
